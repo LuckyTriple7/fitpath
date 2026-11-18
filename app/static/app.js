@@ -796,6 +796,8 @@ function openRecipe(rec, meal) {
   const cache = {};   // food_id -> Lebensmittel (für die Vorschau)
   let servings = rec ? rec.recipe.servings : 2, timer = null, seq = 0;
   openSheet(`<h2>🍲 ${rec ? "Gericht bearbeiten" : "Gericht anlegen"}</h2>
+    ${rec ? "" : `<div class="row nowrap"><input type="url" id="r-link" class="grow" placeholder="🔗 Rezept-Link (Cookidoo, Chefkoch …)" autocomplete="off">
+      <button class="btn small" id="r-import">Holen</button></div><p class="note">Oder von Hand: Zutaten unten suchen und antippen.</p>`}
     <label class="f"><span>Name</span><input type="text" id="r-name" maxlength="120" value="${esc(rec ? rec.name : "")}" placeholder="z. B. Chili con Carne"></label>
     <div class="grid2"><label class="f"><span>Portionen</span>
       <div class="stepper"><button class="btn icon small-icon" id="r-minus">−</button><b id="r-serv">${servings}</b><button class="btn icon small-icon" id="r-plus">+</button></div></label>
@@ -832,6 +834,13 @@ function openRecipe(rec, meal) {
     };
     // Zutaten eines vorhandenen Gerichts für die Vorschau laden
     Promise.all(items.map(it => api(`/api/foods/${it.food_id}`).then(f => (cache[f.id] = f)).catch(() => null))).then(summary);
+    $("#r-import", root) && ($("#r-import", root).onclick = async () => {
+      const url = $("#r-link", root).value.trim();
+      if (!url) return toast("Link einfügen, z. B. aus Cookidoo über „Teilen“");
+      const btn = $("#r-import", root); btn.disabled = true; btn.textContent = "Lese …";
+      try { openRecipeImport(await api("/api/recipes/import", { method: "POST", body: { url } }), meal); }
+      catch (e) { toast(e.message); btn.disabled = false; btn.textContent = "Holen"; }
+    });
     $("#r-minus", root).onclick = () => { servings = Math.max(1, servings - 1); summary(); };
     $("#r-plus", root).onclick = () => { servings = Math.min(50, servings + 1); summary(); };
     $("#r-total", root).oninput = summary;
@@ -870,6 +879,88 @@ function openRecipe(rec, meal) {
       if (!confirm("Gericht löschen? Bereits erfasste Einträge bleiben.")) return;
       const r = await api(`/api/foods/${rec.id}`, { method: "DELETE" });
       lists = null; closeSheet(); toast(`Gericht ${r.result}`);
+    });
+    draw();
+  }, true);
+}
+
+/* ---------- Rezept-Import per Link ---------- */
+
+function openRecipeImport(prop, meal) {
+  const items = prop.items.map(it => ({ ...it, pick: 0 }));
+  let servings = prop.servings;
+  const host = (() => { try { return new URL(prop.url).hostname.replace(/^www\./, ""); } catch (_) { return "Rezeptseite"; } })();
+  openSheet(`<h2>🔗 Rezept übernehmen</h2>
+    <p class="note">Von ${esc(host)}. Prüf kurz die Zuordnung – jede Zutat wird ein Lebensmittel aus der Datenbank, damit Zucker, Fett und 0-Punkte-Gemüse stimmen.</p>
+    <label class="f"><span>Name</span><input type="text" id="i-name" maxlength="120" value="${esc(prop.name)}"></label>
+    <div class="grid2"><label class="f"><span>Portionen${prop.servings_known ? "" : " (bitte prüfen)"}</span>
+      <div class="stepper"><button class="btn icon small-icon" id="i-minus">−</button><b id="i-serv">${servings}</b><button class="btn icon small-icon" id="i-plus">+</button></div></label>
+      <label class="f"><span>Gewicht fertig (g, optional)</span>${decField('id="i-total" placeholder="Summe der Zutaten"', prop.total_g ? numIn.format(prop.total_g) : "")}</label></div>
+    <ul class="list" id="i-items"></ul>
+    <div class="card" id="i-sum" style="text-align:center"></div>
+    <button class="btn primary block" id="i-save">Als Gericht speichern</button>
+    ${prop.nutrition && prop.nutrition.kcal ? `<button class="btn block mt" id="i-simple">Nur die Werte von ${esc(host)} übernehmen</button>
+      <p class="note">Dann fehlen meist Zucker und gesättigtes Fett, die Punkte fallen etwas zu niedrig aus, und Gemüse zählt mit.</p>` : ""}`, root => {
+    const food = it => it.candidates[it.pick];
+    const draw = () => {
+      $("#i-items", root).innerHTML = items.map((it, i) => `<li style="flex-wrap:wrap">
+        <input type="checkbox" data-use="${i}" ${it.use ? "checked" : ""} ${it.candidates.length ? "" : "disabled"} style="width:22px;height:22px;accent-color:var(--accent);flex:none">
+        <div class="bd"><div class="meta">${esc(it.line)}</div>
+          ${it.candidates.length ? `<select data-pick="${i}" style="margin-top:4px">${it.candidates.map((c, k) => `<option value="${k}" ${k === it.pick ? "selected" : ""}>${esc(c.name)} · ${Math.round(c.kcal || 0)} kcal/100 g${c.zero ? " · 0 P" : ""}</option>`).join("")}</select>`
+            : `<div class="meta" style="color:var(--warn)">Kein Treffer für „${esc(it.search)}“</div>`}</div>
+        ${decField(`data-g="${i}" style="width:80px;flex:none;text-align:right"`, numIn.format(it.grams))}<span class="muted">g</span>
+        <button class="btn icon small-icon" data-find="${i}" aria-label="Anders suchen">🔎</button></li>`).join("");
+      summary();
+    };
+    const summary = () => {
+      const used = items.filter(it => it.use && it.candidates.length);
+      let kcal = 0, pts = 0;
+      used.forEach(it => { const f = food(it), n = scaleFood(f, it.grams || 0); kcal += n.kcal; if (!f.zero) pts += rawPoints(n); });
+      $("#i-serv", root).textContent = servings;
+      const site = prop.nutrition && prop.nutrition.kcal ? (prop.nutrition_scope === "total" ? prop.nutrition.kcal / servings : prop.nutrition.kcal) : null;
+      const ours = kcal / servings, diff = site ? Math.round((ours - site) / site * 100) : null;
+      $("#i-sum", root).innerHTML = `<small class="muted">Pro Portion</small>
+        <div style="font-size:1.8rem;font-weight:800">${isPoints() ? `${Math.floor(pts / servings + .5)} P` : `${Math.round(ours)} kcal`}</div>
+        <small>${Math.round(ours)} kcal laut Zuordnung${site ? ` · ${Math.round(site)} kcal laut ${esc(host)} (${diff > 0 ? "+" : ""}${diff} %)` : ""}</small>
+        ${site && Math.abs(diff) > 25 ? `<p class="note" style="color:var(--warn)">Größere Abweichung – Mengen oder Portionen prüfen.</p>` : ""}`;
+    };
+    root.addEventListener("change", e => {
+      const t = e.target;
+      if (t.dataset.use) { items[+t.dataset.use].use = t.checked; summary(); }
+      if (t.dataset.pick) { items[+t.dataset.pick].pick = +t.value; summary(); }
+    });
+    root.addEventListener("input", e => {
+      const t = e.target;
+      if (t.dataset.g) { items[+t.dataset.g].grams = parseNum(t.value) || 0; summary(); }
+      if (t.id === "i-total") summary();
+    });
+    root.addEventListener("click", async e => {
+      const b = e.target.closest("[data-find]"); if (!b) return;
+      const it = items[+b.dataset.find];
+      const term = (prompt("Suchbegriff für diese Zutat:", it.search) || "").trim(); if (!term) return;
+      try { it.candidates = (await api(`/api/foods/search?q=${encodeURIComponent(term)}`)).filter(h => h.source !== "recipe").slice(0, 5); }
+      catch (err) { return toast(err.message); }
+      it.search = term; it.pick = 0; it.use = it.candidates.length > 0; draw();
+    });
+    $("#i-minus", root).onclick = () => { servings = Math.max(1, servings - 1); summary(); };
+    $("#i-plus", root).onclick = () => { servings = Math.min(50, servings + 1); summary(); };
+    $("#i-save", root).onclick = async () => {
+      const used = items.filter(it => it.use && it.candidates.length && it.grams > 0);
+      if (!used.length) return toast("Mindestens eine Zutat auswählen");
+      const body = { name: $("#i-name", root).value.trim() || prop.name, servings, total_g: parseNum($("#i-total", root).value),
+                     source_url: prop.url, items: used.map(it => ({ food_id: food(it).id, grams: it.grams })) };
+      try { const f = await api("/api/recipes", { method: "POST", body }); lists = null; toast("Gericht gespeichert"); openAmount(f, meal); }
+      catch (err) { toast(err.message); }
+    };
+    $("#i-simple", root) && ($("#i-simple", root).onclick = async () => {
+      // Werte der Seite: bei bekanntem Gesamtgewicht echt je 100 g, sonst 1 Portion = 100 g als Rechengröße
+      const n = prop.nutrition, total = parseNum($("#i-total", root).value);
+      const whole = k => (n[k] || 0) * (prop.nutrition_scope === "total" ? 1 : servings);
+      const per100 = k => total ? whole(k) / total * 100 : whole(k) / servings;
+      const body = { name: `${$("#i-name", root).value.trim() || prop.name} (Werte ${host})`, serving_g: total ? total / servings : 100 };
+      ["kcal", "protein", "fat", "satfat", "carbs", "sugar", "fiber"].forEach(k => { if (n[k] != null) body[k] = Math.round(per100(k) * 10) / 10; });
+      try { const f = await api("/api/foods", { method: "POST", body }); lists = null; toast("Übernommen"); openAmount(f, meal); }
+      catch (err) { toast(err.message); }
     });
     draw();
   }, true);

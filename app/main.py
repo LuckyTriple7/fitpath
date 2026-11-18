@@ -9,10 +9,11 @@ import uuid
 from contextlib import asynccontextmanager
 from datetime import timedelta
 
+import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 
-from . import __version__, ai, auth, backup, body, db, diary, foods, ingest, motivation, points, push
+from . import __version__, ai, auth, backup, body, db, diary, foods, ingest, motivation, points, push, recipe_import
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 MAX_INGEST_BYTES = 12 * 1024 * 1024
@@ -342,6 +343,32 @@ async def recipe_create(request: Request, device=Depends(auth.require)):
         except ValueError as exc:
             raise HTTPException(400, str(exc))
         return foods.get_recipe(conn, fid)
+
+
+@app.post("/api/recipes/import")
+async def recipe_import_link(request: Request, device=Depends(auth.require)):
+    """Rezept-Link → Vorschlag (Zutaten mit Treffern). Gespeichert wird erst über POST /api/recipes."""
+    data = await request.json()
+    url = _clean_text(data.get("url"), 500)
+    m = re.search(r"https?://\S+", url)
+    if not m:
+        raise HTTPException(400, "Bitte einen Rezept-Link einfügen")
+    url = m.group(0)
+    try:
+        page_url, page = await asyncio.to_thread(recipe_import.fetch, url)
+        parsed = recipe_import.parse_recipe(page)
+    except recipe_import.ImportError_ as exc:
+        raise HTTPException(400, str(exc))
+    except httpx.HTTPError:
+        raise HTTPException(502, "Seite nicht erreichbar")
+    terms = None
+    if ai.available():
+        try:
+            terms = await ai.parse_ingredients(parsed["ingredients"])
+        except Exception as exc:   # ohne KI geht es mit der eigenen Erkennung weiter
+            print(f"KI-Zutaten: {exc}", flush=True)
+    with db.connect() as conn:
+        return recipe_import.from_parsed(conn, page_url, parsed, terms)
 
 
 @app.put("/api/recipes/{food_id}")

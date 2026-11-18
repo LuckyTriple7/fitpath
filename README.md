@@ -71,7 +71,7 @@ git push --follow-tags            # GitHub testet, prüft Tag = Version, baut da
 | Erfassen | Suche in rund 7.140 BLS-Lebensmitteln plus eigenen, Listen „Zuletzt“, „Favoriten“, „Eigene“, Barcode per Kamera (`BarcodeDetector` in Chrome für Android, sonst Zahl eintippen), Portionen (Scheibe, Stück, Glas …) mit Anzahl, Live-Vorschau mit Erklärung der Punkte, eigene Portionen merken, 0-Punkte-Schalter je Lebensmittel |
 | Eigene Lebensmittel | Nährwerte je 100 g von der Packung, optional mit Barcode; unbekannte Barcodes landen direkt im Formular |
 | Wie gestern | Leere Mahlzeit zeigt „Gestern: …“ mit Knopf **↺ Wie gestern**: übernimmt alle Einträge dieser Mahlzeit vom Vortag, mit „Rückgängig“ |
-| Gerichte | Aus Zutaten (Suche, Gramm je Zutat), Portionen, optional Gewicht nach dem Kochen; erscheint in Suche und unter „Eigene“ und wird wie ein Lebensmittel erfasst. 0-Punkte-Zutaten bleiben 0 Punkte |
+| Gerichte | Aus Zutaten (Suche, Gramm je Zutat) oder per **Rezept-Link** (Cookidoo, Chefkoch und andere Seiten mit schema.org-Rezeptdaten), Portionen, optional Gewicht nach dem Kochen; erscheint in Suche und unter „Eigene“ und wird wie ein Lebensmittel erfasst. 0-Punkte-Zutaten bleiben 0 Punkte |
 | Per Text (KI) | ✨ im Erfassen-Blatt: „2 Brötchen mit Butter und Gouda, Kaffee mit Milch“ → KI zerlegt in Lebensmittel mit Menge, FitPath schlägt je Posten 5 Treffer aus der eigenen DB vor; Auswahl, Gramm und Mahlzeit änderbar, erfasst wird erst nach Bestätigung |
 | Gewicht | Trendgewicht (geglättet), Tempo kg/Woche, Ziel mit Meilensteinen (−5 %, −10 %), BMI mit WHO-Skala, Verlauf und BMI beim Zielgewicht, Verlauf 30/90/365 Tage, Körperfett und Bauchumfang |
 | Motivation | Level und Erfahrungspunkte, 16 Abzeichen (Tage in Folge, Tage im Budget, Schrittziel, −2/−5/−10 %, Zielgewicht …), Wochen-Challenge mit automatischer Zählung und „Andere“, Konfetti bei neuem Abzeichen, Level oder geschaffter Challenge; Übersicht unter **Erfolge** (Mehr → Wenn-Dann-Pläne → 🏅 oder Level-Karte auf Heute) |
@@ -80,6 +80,14 @@ git push --follow-tags            # GitHub testet, prüft Tag = Version, baut da
 | Health Connect | Webhook für Life Dashboard Companion: Schritte (Tagessummen), Gewicht, Körperfett, Löschungen, Verlauf nachladen |
 | Push | Wiegen (Wochentage wählbar), „noch nichts erfasst“ am Mittag, etwa 15 Minuten vor typischen Snack-Uhrzeiten (gelernt aus Snack-Einträgen und Heißhunger der letzten 3 Wochen, ab 3 Tagen je Stunde), Abend-Check; Ruhezeiten und Höchstzahl pro Tag |
 | Offline | App-Hülle und letzter Zustand aus dem Cache, Einträge warten in einer Warteschlange |
+
+## Rezept-Import per Link
+
+Unter **Erfassen → 🍲 Gericht anlegen** einen Rezept-Link einfügen (in der Cookidoo-App über „Teilen“). FitPath ruft die Seite einmal ab und liest die eingebetteten Rezeptdaten (schema.org „Recipe“): Name, Ausbeute, Zutaten, Nährwerte. Jede Zutatenzeile wird in Gramm umgerechnet („2 EL Olivenöl“ = 24 g, „1 Zwiebel“ = 80 g, Spannen wie „40 – 60 g“ = Mittelwert, englische Zutaten werden übersetzt) und einem Lebensmittel der Datenbank zugeordnet; ist eine KI eingerichtet, schlägt sie Suchbegriffe und Mengen vor. Wasser und „nach Belieben“-Zutaten sind abgewählt. In der Prüfliste lassen sich Treffer, Gramm und Portionen ändern (🔎 sucht neu); daneben steht die kcal-Angabe der Seite zur Kontrolle, ab 25 % Abweichung mit Hinweis.
+
+Gespeichert wird ein normales Gericht mit allen Nährwerten (Gemüse bleibt 0 Punkte), die Quelle steht mit im Gericht. Rückfall: **Nur die Werte der Seite übernehmen** legt ein Lebensmittel aus den Nährwerten der Seite an; dort fehlen meist Zucker und gesättigtes Fett.
+
+Abgerufen werden nur öffentliche Adressen (kein Zugriff aufs Heimnetz), höchstens 3 MB, auf Klick des Nutzers.
 
 ## Motivation
 
@@ -171,6 +179,7 @@ Uhrzeiten und Zahlen gibt die App unabhängig von der Browsersprache ein: Uhrzei
 | `app/foods.py` | BLS-Import, Suche, Portionen, eigene Lebensmittel, Open-Food-Facts-Barcodes |
 | `app/diary.py` | Tagessummen, Übersicht „Heute“, Verlauf für die Statistik |
 | `app/body.py` | Trendgewicht, Tempo, Meilensteine |
+| `app/recipe_import.py` | Rezept-Link: Abruf, schema.org-Daten, Zutaten in Gramm und Zuordnung |
 | `app/motivation.py` | XP, Level, Abzeichen, Wochen-Challenge, Heißhunger-Auswertung, Snack-Uhrzeiten |
 | `app/ingest.py` | Health-Connect-Webhook, Koppel-Link, Diagnose |
 | `app/ai.py` | Erfassen per Text über LiteLLM |

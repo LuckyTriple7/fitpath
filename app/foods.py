@@ -135,6 +135,12 @@ SYNONYMS = {
     "weizenbier": ["hefeweizen weizenbier"], "wein": ["rotwein trocken", "weisswein trocken"],
     "rotwein": ["rotwein trocken"], "weisswein": ["weisswein trocken"], "schnaps": ["obstbrand", "wodka"],
     "joghurt": ["joghurt mild"],
+    # häufige Rezept-Zutaten
+    "mehl": ["weizen mehl type 405"], "weizenmehl": ["weizen mehl type 405"], "zucker": ["zucker weiss"],
+    "salz": ["speisesalz"], "butter": ["butter mild gesauert"], "sahne": ["schlagsahne"],
+    "rapskernol": ["rapsol"], "rapsol": ["rapsol"], "pflanzenol": ["rapsol"], "sonnenblumenol": ["sonnenblumenol"],
+    "obstsaft": ["apfelsaft"], "saft": ["apfelsaft", "orangensaft"], "bruhe": ["gemusebruhe"],
+    "creme fraiche": ["creme fraiche"], "gemuse": ["gemusemischung"], "fleisch": ["rind fleisch", "schwein fleisch"], "knoblauchzehe": ["knoblauch roh"], "knoblauchzehen": ["knoblauch roh"],
 }
 SYNONYM_BONUS = 25
 EXACT_BONUS = 15
@@ -568,8 +574,14 @@ def _recipe_values(conn, data: dict) -> dict:
     out = {k: round(v / weight * 100, 3) for k, v in sums.items()}
     out.update(name=name, pts_100=round(pts / weight * 100, 4), serving_g=round(weight / servings, 1),
                recipe=json.dumps({"items": [{"food_id": f["id"], "name": f["name"], "grams": g} for f, g in items],
-                                  "servings": servings, "total_g": total}, ensure_ascii=False))
+                                  "servings": servings, "total_g": total, "source_url": _source(data.get("source_url"))},
+                                 ensure_ascii=False))
     return out
+
+
+def _source(url) -> str | None:
+    url = str(url or "").strip()[:300]
+    return url if re.match(r"^https?://", url) else None
 
 
 def save_recipe(conn, data: dict, food_id: int | None = None) -> int:

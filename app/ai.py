@@ -66,6 +66,33 @@ Antworte ausschließlich mit JSON, ohne Text davor oder danach:
 - Wasser, ungesüßter Tee und Gewürze weglassen."""
 
 
+INGREDIENT_SYSTEM = """Du bekommst die Zutatenliste eines Rezepts, eine Zutat pro Zeile mit Nummer.
+Antworte ausschließlich mit JSON: {"items": [{"i": 0, "search": "...", "grams": 123}]}, ein Eintrag je Zeile, gleiche Reihenfolge.
+- search: Suchbegriff wie in einer deutschen Nährwerttabelle (Bundeslebensmittelschlüssel), deutsch, Grundform,
+  Einzahl, roh, wenn nicht anders angegeben. Beispiele: "Speisezwiebel roh", "Karotte", "Süßkartoffel roh",
+  "Hähnchen Schenkel", "Rapsöl", "Gemüsebrühe", "Schlagsahne", "Butter", "Weizenmehl", "Zucker", "Vollmilch".
+  Englische Zutaten übersetzen.
+- grams: Menge der Zeile in Gramm (Flüssigkeit ml ≈ g). Spannen: Mittelwert. Ohne Menge: übliche Menge für ein Rezept.
+  Stückgewichte: Zwiebel 80, Knoblauchzehe 4, Karotte 70, Ei 55, Kartoffel 80, EL 12, TL 5, Prise 0,5."""
+
+
+async def parse_ingredients(lines: list) -> list:
+    """Je Zutat {search, grams} oder leer, Reihenfolge wie die Eingabe."""
+    text = "\n".join(f"{i}: {l}" for i, l in enumerate(lines))
+    data = extract_json(await _complete(INGREDIENT_SYSTEM, text, max_tokens=1500))
+    out = [{} for _ in lines]
+    for it in data.get("items") or []:
+        try:
+            i = int(it.get("i"))
+        except (TypeError, ValueError):
+            continue
+        if 0 <= i < len(out):
+            g = it.get("grams")
+            out[i] = {"search": str(it.get("search") or "")[:80],
+                      "grams": float(g) if isinstance(g, (int, float)) and 0 < g <= 10000 else None}
+    return out
+
+
 def available() -> bool:
     return bool(AI_KEY)
 
