@@ -522,7 +522,8 @@ function openSOS() {
     <div id="sos-plan"></div>
     <div class="center"><div class="ring">${ringSvg(1, false)}<div class="t"><b id="sos-clock">10:00</b><span>Welle aussitzen</span></div></div></div>
     <p class="center" id="sos-tip">${esc(SOS_TIPS[0])}</p>
-    <div class="row nowrap mt"><button class="btn grow" id="sos-ate">Doch gegessen</button><button class="btn primary grow" id="sos-ok">💪 Geschafft</button></div>`, root => {
+    <div class="row nowrap mt"><button class="btn grow" id="sos-ate">Doch gegessen</button><button class="btn primary grow" id="sos-ok">💪 Geschafft</button></div>
+    <button class="btn block mt" data-close>Abbrechen (nichts speichern)</button>`, root => {
     const showPlan = () => {
       const plan = trigger && (s.plans || {})[trigger];
       $("#sos-plan", root).innerHTML = trigger ? (plan ? `<div class="card" style="border-color:var(--accent)"><small class="muted">Dein Plan bei ${esc(trigger)}</small><p><b>${esc(plan)}</b></p></div>`
