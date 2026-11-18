@@ -98,3 +98,42 @@ def test_ai_parse(monkeypatch):
     monkeypatch.setattr(ai, "_complete", broken)
     assert c.post("/api/ai/parse", headers=H, json={"text": "irgendwas"}).status_code == 502
     c.__exit__(None, None, None)
+
+
+def test_ai_label_photo(monkeypatch):
+    c = client()
+    img = "data:image/jpeg;base64,/9j/4AAQSkZJRg=="
+    assert c.post("/api/ai/label", headers=H, json={"images": [img]}).status_code == 503
+    seen = {}
+
+    async def fake(system, user, max_tokens=700):
+        seen["user"] = user
+        return ('{"name": "Proteinriegel Schoko", "brand": "Testmarke", "kcal": null, "kj": "1590", "protein": "30", '
+                '"fat": "12,5", "satfat": "6", "carbs": "35", "sugar": "< 3", "fiber": 8, "salt": "0,4", '
+                '"alcohol_vol": null, "serving_g": 45, "note": null}')
+    monkeypatch.setattr(ai, "AI_KEY", "test")
+    monkeypatch.setattr(ai, "_complete", fake)
+    r = c.post("/api/ai/label", headers=H, json={"images": [img]})
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert seen["user"][1] == {"type": "image_url", "image_url": {"url": img}}
+    assert d["kcal"] == 380.0 and d["fat"] == 12.5 and d["sugar"] == 3 and d["salt"] == 0.4 and d["serving_g"] == 45
+    assert d["name"] == "Proteinriegel Schoko" and d["brand"] == "Testmarke" and d["found"] == 8 and d["warnings"] == []
+    # ungültige Fotos
+    assert c.post("/api/ai/label", headers=H, json={"images": []}).status_code == 400
+    assert c.post("/api/ai/label", headers=H, json={"images": ["data:text/html;base64,PGh0bWw+"]}).status_code == 400
+    assert c.post("/api/ai/label", headers=H, json={"images": ["https://example.com/a.jpg"]}).status_code == 400
+
+    async def broken(system, user, max_tokens=700):
+        return "Ich sehe nur ein unscharfes Bild."
+    monkeypatch.setattr(ai, "_complete", broken)
+    assert c.post("/api/ai/label", headers=H, json={"images": [img]}).status_code == 502
+    c.__exit__(None, None, None)
+
+
+def test_clean_label_plausibility():
+    d = ai.clean_label({"kcal": 100, "protein": 20, "fat": 20, "carbs": 30, "satfat": 25, "sugar": 10})
+    assert d["satfat"] is None                                   # „davon“ größer als Fett: verlesen
+    assert any("bitte prüfen" in w for w in d["warnings"])       # 20·4 + 20·9 + 30·4 = 380 ≠ 100
+    d = ai.clean_label({"kcal": 2000, "protein": -1, "alcohol_vol": "5,0 % vol", "note": "Werte nur je Portion"})
+    assert d["kcal"] is None and d["protein"] is None and d["alcohol"] == 3.95 and d["warnings"] == ["Werte nur je Portion"]

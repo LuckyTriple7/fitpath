@@ -402,6 +402,30 @@ async def ai_parse(request: Request, device=Depends(auth.require)):
         raise HTTPException(502, "KI nicht erreichbar")
 
 
+LABEL_IMAGE = re.compile(r"^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$")
+
+
+@app.post("/api/ai/label")
+async def ai_label(request: Request, device=Depends(auth.require)):
+    """Foto(s) einer Packung → Nährwerte je 100 g zum Vorausfüllen. Fotos werden nicht gespeichert."""
+    if not ai.available():
+        raise HTTPException(503, "KI nicht eingerichtet")
+    if int(request.headers.get("content-length") or 0) > 8_000_000:
+        raise HTTPException(413, "Foto zu groß")
+    data = await request.json()
+    images = [str(i) for i in list(data.get("images") or [])[:2]]
+    if not images or not all(len(i) <= 3_500_000 and LABEL_IMAGE.match(i) for i in images):
+        raise HTTPException(400, "Foto fehlt oder ungültig")
+    try:
+        return await ai.read_label(images)
+    except (ValueError, KeyError) as exc:
+        print(f"KI-Antwort (Foto) nicht lesbar: {exc}", flush=True)
+        raise HTTPException(502, "KI konnte das Foto nicht auswerten – schärfer oder näher fotografieren")
+    except Exception as exc:
+        print(f"KI-Fehler (Foto): {exc}", flush=True)
+        raise HTTPException(502, "KI nicht erreichbar oder versteht keine Bilder")
+
+
 @app.delete("/api/foods/{food_id}")
 def food_delete(food_id: int, device=Depends(auth.require)):
     with db.connect() as conn:

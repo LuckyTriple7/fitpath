@@ -305,3 +305,6 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 36px; }
 .pair-qr svg { border-radius: 12px; background: #fff; }
 .pair-code { font-size: 2.2rem; font-weight: 800; letter-spacing: .12em; font-variant-numeric: tabular-nums; }
 .linkbtn { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); text-decoration: underline; cursor: pointer; }
+
+/* Von der KI vorausgefüllte Felder (Nährwerte vom Foto) */
+.ai-filled { box-shadow: inset 0 0 0 2px var(--accent); }

@@ -1170,10 +1170,26 @@ function showProposals(root, d, meal) {
 const NUTR_FIELDS = [["kcal", "Energie (kcal)"], ["protein", "Eiweiß (g)"], ["fat", "Fett (g)"], ["satfat", "davon gesättigt (g)"],
   ["carbs", "Kohlenhydrate (g)"], ["sugar", "davon Zucker (g)"], ["fiber", "Ballaststoffe (g)"], ["salt", "Salz (g)"], ["alcohol", "Alkohol (g)"]];
 
+/* Foto verkleinern (längste Seite 1600 px, JPEG): reicht für kleine Schrift, hält die Anfrage klein */
+const num2In = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 2, useGrouping: false });   // KI-Werte wie auf der Packung (Salz 0,45)
+
+async function photoDataUrl(file, max = 1600) {
+  const bmp = await createImageBitmap(file);
+  const f = Math.min(1, max / Math.max(bmp.width, bmp.height));
+  const cv = document.createElement("canvas");
+  cv.width = Math.round(bmp.width * f); cv.height = Math.round(bmp.height * f);
+  cv.getContext("2d").drawImage(bmp, 0, 0, cv.width, cv.height);
+  bmp.close && bmp.close();
+  return cv.toDataURL("image/jpeg", 0.85);
+}
+
 function openCustom(food, meal, hint = "") {
   const editing = food && food.id && (food.source === "custom" || food.source === "off");
   openSheet(`<h2>${editing ? "Lebensmittel bearbeiten" : "Eigenes Lebensmittel"}</h2>
     ${hint ? `<p class="note">${esc(hint)}</p>` : ""}
+    ${S.ai ? `<button class="btn block" id="c-photo">📷 Packung fotografieren – KI liest die Nährwerte</button>
+      <input type="file" accept="image/*" capture="environment" id="c-file" hidden>
+      <div id="c-ai"></div>` : ""}
     <label class="f"><span>Name</span><input type="text" id="c-name" value="${esc(food.name || "")}" maxlength="120"></label>
     <div class="grid2"><label class="f"><span>Marke (optional)</span><input type="text" id="c-brand" value="${esc(food.brand || "")}"></label>
       <label class="f"><span>Barcode (optional)</span><input type="text" inputmode="numeric" id="c-code" value="${esc(food.code && food.source !== "bls" ? food.code : "")}"></label></div>
@@ -1182,6 +1198,31 @@ function openCustom(food, meal, hint = "") {
       <label class="f"><span>Portion (g, optional)</span>${decField('id="c-serv"', food.serving_g != null ? numIn.format(food.serving_g) : "")}</label></div>
     ${editing && food.source === "off" ? `<p class="note">Hinweis: Änderungen an Open-Food-Facts-Produkten speichert FitPath als eigenes Lebensmittel mit gleichem Barcode.</p>` : ""}
     <div class="row nowrap mt">${editing && food.source === "custom" ? `<button class="btn danger" id="c-del">Löschen</button>` : ""}<button class="btn primary grow" id="c-save">Speichern</button></div>`, root => {
+    const fileIn = $("#c-file", root);
+    fileIn && ($("#c-photo", root).onclick = () => fileIn.click());
+    fileIn && (fileIn.onchange = async () => {
+      const file = fileIn.files[0]; fileIn.value = "";
+      if (!file) return;
+      const btn = $("#c-photo", root), box = $("#c-ai", root);
+      btn.disabled = true; btn.textContent = "⏳ KI liest die Packung …";
+      try {
+        const r = await api("/api/ai/label", { method: "POST", body: { images: [await photoDataUrl(file)] } });
+        const filled = [];
+        for (const [k, l] of NUTR_FIELDS) {
+          if (r[k] == null) continue;
+          const i = $(`[data-n="${k}"]`, root); i.value = num2In.format(r[k]); i.classList.add("ai-filled"); filled.push(l.replace(/ \(.*/, ""));
+        }
+        if (r.serving_g != null && !$("#c-serv", root).value) $("#c-serv", root).value = numIn.format(r.serving_g);
+        if (r.name && !$("#c-name", root).value.trim()) $("#c-name", root).value = r.name;
+        if (r.brand && !$("#c-brand", root).value.trim()) $("#c-brand", root).value = r.brand;
+        const missName = !$("#c-name", root).value.trim();
+        box.innerHTML = `<div class="card" style="border-color:${r.warnings.length ? "var(--warn)" : "var(--accent)"}">
+          ${filled.length ? `<p><b>${filled.length} Werte übernommen</b> – bitte mit der Packung vergleichen.</p>` : `<p><b>Keine Nährwerte gefunden.</b> Die Tabelle gerade und nah fotografieren.</p>`}
+          ${r.warnings.map(w => `<p class="note" style="color:var(--warn)">⚠️ ${esc(w)}</p>`).join("")}
+          ${missName ? `<p class="note">Name nicht lesbar – eintippen oder die Vorderseite fotografieren.</p>` : ""}</div>`;
+      } catch (err) { toast(err.message); }
+      btn.disabled = false; btn.textContent = "📷 Weiteres Foto (z. B. Vorderseite für den Namen)";
+    });
     $("#c-save", root).onclick = async () => {
       const body = { name: $("#c-name", root).value, brand: $("#c-brand", root).value, code: $("#c-code", root).value, serving_g: parseNum($("#c-serv", root).value) };
       $$("[data-n]", root).forEach(i => { body[i.dataset.n] = i.value === "" ? null : parseNum(i.value); });
@@ -1219,7 +1260,7 @@ function openScan(meal) {
       let r;
       try { r = await api(`/api/foods/barcode/${encodeURIComponent(code)}`); } catch (err) { done = false; return toast(err.message); }
       if (r.status === "found") { lists = null; return openAmount(r.food, meal); }
-      if (r.status === "unknown") return openCustom({ code, name: r.name || "" }, meal, "Bei Open Food Facts nicht gefunden (oder ohne Nährwerte). Werte von der Packung abtippen – beim nächsten Scan kennt FitPath das Produkt.");
+      if (r.status === "unknown") return openCustom({ code, name: r.name || "" }, meal, `Bei Open Food Facts nicht gefunden (oder ohne Nährwerte). ${S.ai ? "Nährwerttabelle fotografieren oder Werte abtippen" : "Werte von der Packung abtippen"} – beim nächsten Scan kennt FitPath das Produkt.`);
       done = false;
       toast(r.status === "busy" ? "Zu viele Abfragen – kurz warten" : r.status === "invalid" ? "Barcode ungültig" : "Open Food Facts nicht erreichbar");
     };
