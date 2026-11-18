@@ -26,7 +26,9 @@ services:
       AI_MODEL_FAST: ${FITPATH_AI_MODEL:-${FITPATH_MODEL_FAST:-claude-haiku-5-5}}
       AI_HEADERS: ${FITPATH_AI_HEADERS:-}
 
-    # Daten im Stack-Ordner (Datenbank, VAPID-Schlüssel, tägliche Sicherung data/backup/)
+    # Daten im Stack-Ordner (Datenbank, VAPID-Schlüssel, tägliche Sicherung data/backup/).
+    # Der Ordner muss UID 10001 gehören: vor dem ersten Start "mkdir -p data && chown 10001 data".
+    # Ohne Kommandozeile (nur Dockge): stattdessen "- fitpath_data:/data" und unten "volumes:" einkommentieren.
     volumes:
       - ./data:/data
 
@@ -44,3 +46,7 @@ services:
     mem_limit: 192m
 
 # Eigenes Netz zum KI-Proxy o. Ä.: compose.override.yml anlegen (Vorlage compose.override.example.yml).
+
+# Benanntes Volume für die Einrichtung nur mit Dockge (siehe oben):
+# volumes:
+#   fitpath_data:

@@ -169,8 +169,25 @@ MIGRATIONS = {
 }
 
 
-def init() -> None:
+def check_writable() -> None:
+    """Klare Meldung statt „unable to open database file“, wenn der Datenordner nicht beschreibbar ist
+    (typisch: Docker hat ./data beim ersten Start als root angelegt)."""
     os.makedirs(DATA_DIR, exist_ok=True)
+    probe = os.path.join(DATA_DIR, ".schreibtest")
+    try:
+        with open(probe, "w") as fh:
+            fh.write("ok")
+        os.remove(probe)
+    except OSError as exc:
+        uid = os.getuid() if hasattr(os, "getuid") else "?"
+        raise SystemExit(
+            f"FEHLER: Datenordner {DATA_DIR} ist nicht beschreibbar ({exc.strerror}). Die App läuft als UID {uid}.\n"
+            f"Lösung: auf dem Host im Stack-Ordner 'chown {uid} data' ausführen, oder in compose.yml statt "
+            f"'./data:/data' ein benanntes Volume nehmen (siehe README, Einrichten mit Dockge).") from None
+
+
+def init() -> None:
+    check_writable()
     with connect() as conn:
         conn.executescript(SCHEMA)
         for table, cols in MIGRATIONS.items():

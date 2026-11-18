@@ -11,7 +11,7 @@ Voraussetzungen: Docker mit Compose (mit `${A:-${B}}` in der `compose.yml`, also
 mkdir -p /opt/docker/stacks/fitpath && cd /opt/docker/stacks/fitpath
 # compose.yml und .env.example aus diesem Repo hierher kopieren
 cp .env.example .env            # FITPATH_PUBLIC_URL anpassen, KI-Key optional
-mkdir -p data && chown 10001 data
+mkdir -p data && chown 10001 data   # gehört sonst root, dann kann die App nicht schreiben
 docker compose up -d
 docker compose logs fitpath     # erwartet: "BLS importiert: 7140 Lebensmittel"
 docker compose exec fitpath python -m app.cli link Handy     # Anmeldelink erzeugen
@@ -22,6 +22,22 @@ Den Link auf dem Handy öffnen, **Verbinden** tippen, Onboarding durchgehen, „
 Reverse Proxy: auf `http://127.0.0.1:8800` weiterleiten (Port über `FITPATH_PORT` änderbar). Bot-Schutz (z. B. Anubis) für diese Adresse ausschalten, sonst scheitern API-Aufrufe, Service Worker, Push-Klicks und der Health-Connect-Webhook. Erlaubte Größe von Anfragen mindestens 16 MB (z. B. nginx `client_max_body_size 16m;`), sonst bricht das Nachladen der Health-Connect-Vergangenheit mit `413` ab.
 
 Soll der Container ein bestehendes Docker-Netz erreichen (z. B. das des KI-Proxys), `compose.override.example.yml` nach `compose.override.yml` kopieren und anpassen. Die Datei lädt `docker compose` (auch Dockge) automatisch mit.
+
+## Einrichten mit Dockge
+
+1. In Dockge **+ Compose**, Stack-Name `fitpath`.
+2. Den Inhalt von [`compose.yml`](compose.yml) in das Feld für die Compose-Datei kopieren. Ohne Zugriff auf die Kommandozeile des Servers die Zeile `- ./data:/data` durch `- fitpath_data:/data` ersetzen und die drei auskommentierten Zeilen ganz unten einkommentieren:
+   ```yaml
+   volumes:
+     fitpath_data:
+   ```
+   Ein benanntes Volume übernimmt den richtigen Eigentümer aus dem Image. Ein Ordner `./data`, den Docker selbst anlegt, gehört dagegen root, und die App kann nicht hineinschreiben (sie meldet das beim Start im Log).
+3. Im Feld **.env** mindestens `FITPATH_PUBLIC_URL=https://…` eintragen, für die KI optional `FITPATH_AI_URL`, `FITPATH_AI_KEY`, `FITPATH_AI_MODEL` (Beispiele in [`.env.example`](.env.example)).
+4. **Deploy**. Im Log erscheint beim ersten Start „BLS importiert: 7140 Lebensmittel“, der Container wird nach etwa 20 Sekunden „healthy“.
+5. Anmeldelink: beim Container `fitpath` das Terminal öffnen (Symbol `>_`, Shell `sh`) und `python -m app.cli link Handy` eingeben. Den Link auf dem Handy öffnen und **Verbinden** tippen.
+6. Reverse Proxy auf `http://127.0.0.1:8800` einrichten (siehe oben).
+
+Updates holt der Knopf **Update** im Stack. Sicherung beim benannten Volume: die Daten liegen unter `/var/lib/docker/volumes/fitpath_fitpath_data/_data`, die App legt dort täglich eine Kopie nach `backup/`; zusätzlich Export als JSON unter **Mehr → Daten**.
 
 ## Update
 

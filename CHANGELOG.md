@@ -6,6 +6,10 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+### Hinzugefügt
+- Anleitung „Einrichten mit Dockge“ im README, Variante mit benanntem Volume in `compose.yml`.
+- Klare Meldung beim Start, wenn der Datenordner nicht beschreibbar ist (statt „unable to open database file“), mit der Lösung.
+
 ### Geändert
 - Repo und Image sind öffentlich (MIT-Lizenz); `docker login` ist nicht mehr nötig.
 
