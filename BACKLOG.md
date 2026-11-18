@@ -8,7 +8,7 @@ Doku: [README.md](README.md)
 - Level und Erfahrungspunkte, Abzeichen: Streak „jeden Tag erfasst“, Schrittziel, −5 %/−10 %, 7 Tage im Budget.
 - Wochen-Challenge (z. B. „5× Gemüse zum Mittag“, „3 Tage über 8.000 Schritte“), Konfetti-Feier.
 - SOS Heißhunger: Wenn-Dann-Plan je Auslöser (Stress, Langeweile, abends Fernsehen), 10-Minuten-Ring, Glas Wasser, Ergebnis speichern.
-- Push zu gelernten Snack-Uhrzeiten (15 Minuten vorher) (aus den Uhrzeiten früherer Snacks gelernt).
+- Push 15 Minuten vor den typischen Snack-Uhrzeiten (aus früheren Einträgen gelernt).
 
 ### Schritt 4 – KI
 - Coach mit Allowlist (Budget, Trend, Schritte, Top-Snack-Zeiten; nie Notizen).
