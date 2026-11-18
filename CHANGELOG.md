@@ -6,6 +6,8 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+## [0.6.1] – 2026-11-18
+
 ### Hinzugefügt
 - Heißhunger-SOS: Knopf „Abbrechen“, schließt ohne zu speichern.
 
