@@ -13,7 +13,9 @@ import os
 import random
 from datetime import datetime
 
-from . import db
+from datetime import timedelta
+
+from . import db, motivation
 
 VAPID_FILE = os.path.join(db.DATA_DIR, "vapid_private.pem")
 VAPID_SUB = os.environ.get("VAPID_SUB") or os.environ.get("PUBLIC_URL") or "https://localhost"
@@ -103,6 +105,9 @@ WEIGH_TEXTS = ["Guten Morgen! Kurz auf die Waage – nüchtern ist der Wert am e
                "Wiege-Tag. Der Trend zählt, nicht der einzelne Wert."]
 LUNCH_TEXTS = ["Heute noch nichts erfasst. Ein Tipp auf „Zuletzt“ reicht oft schon.",
                "Was gab's bisher? Frühstück und Mittag nachtragen dauert 30 Sekunden."]
+SNACK_TEXTS = ["Um diese Zeit kommt oft der Snack-Hunger. Erst ein Glas Wasser – und wenn doch, Obst oder Gemüse kosten 0 Punkte.",
+               "Gleich ist Snack-Zeit. Hast du einen Plan? Im Notfall hilft der 🍫-Knopf oben.",
+               "Kleiner Hinweis vor der üblichen Nasch-Zeit: Tee, Wasser oder ein Apfel halten bis zur nächsten Mahlzeit."]
 EVENING_TEXTS = ["Tag fast geschafft. Fehlt noch eine Mahlzeit im Tagebuch?",
                  "Kurzer Abend-Check: Ist alles erfasst? Dann siehst du morgen die Reserve."]
 
@@ -135,7 +140,16 @@ def tick() -> None:
                 send(conn, "Noch nichts erfasst", random.choice(LUNCH_TEXTS), "/#heute", "lunch")
                 return
 
-        # 3. Abend: weniger als zwei Mahlzeiten
+        # 3. Snack-Uhrzeiten: etwa 15 Minuten vor einer Stunde, in der oft genascht wird
+        if s.get("snack_push"):
+            nxt = (loc + timedelta(minutes=20)).replace(minute=0, second=0, microsecond=0)
+            if 0 < (nxt - loc).total_seconds() / 60 <= 20:
+                for h in motivation.critical_hours(conn):
+                    if h["hour"] == nxt.hour and _log(conn, "snack", f"snack:{today}:{h['hour']}"):
+                        send(conn, "Snack-Zeit", random.choice(SNACK_TEXTS), "/#sos", "snack")
+                        return
+
+        # 4. Abend: weniger als zwei Mahlzeiten
         if s.get("evening_time") and cur >= _hm(s["evening_time"], "20:30"):
             if entries[1] < 2 and _log(conn, "evening", f"evening:{today}"):
                 send(conn, "Tag abschließen", random.choice(EVENING_TEXTS), "/#heute", "evening")

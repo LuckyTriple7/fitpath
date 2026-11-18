@@ -6,6 +6,14 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+### Hinzugefügt
+- Level und Erfahrungspunkte, 16 Abzeichen, Wochen-Challenge mit automatischer Zählung, Konfetti; Übersicht **Erfolge**.
+- Heißhunger-SOS (Knopf oben): Auslöser, eigener Wenn-Dann-Plan, 10-Minuten-Timer, Ergebnis wird gespeichert; Pläne unter **Mehr → Wenn-Dann-Pläne**.
+- Push etwa 15 Minuten vor typischen Snack-Uhrzeiten (abschaltbar).
+- BMI mit WHO-Skala, Verlauf und BMI beim Zielgewicht im Tab **Gewicht**.
+- Heißhunger-Auswertung in der Statistik.
+- Versionsnummer oben neben dem Logo.
+
 ## [0.5.1] – 2026-11-18
 
 ### Hinzugefügt

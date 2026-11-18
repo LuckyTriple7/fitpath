@@ -224,7 +224,7 @@ function chipVal(root, name) {
 
 /* ---------- Router ---------- */
 
-const routes = { heute: viewToday, statistik: viewStats, gewicht: viewWeight, mehr: viewMore };
+const routes = { heute: viewToday, statistik: viewStats, gewicht: viewWeight, mehr: viewMore, erfolge: viewAchievements };
 
 async function render() {
   const route = (location.hash || "#heute").slice(1).split("?")[0];
@@ -233,18 +233,22 @@ async function render() {
   }
   if (!S.settings.onboarded) { $("#tabbar").hidden = true; return viewOnboarding(); }
   $("#tabbar").hidden = false;
-  if (route === "erfassen" || route === "scannen" || route === "wiegen") {
+  $("#sos-top").hidden = false;
+  if (route === "erfassen" || route === "scannen" || route === "wiegen" || route === "sos") {
     history.replaceState(null, "", "#heute");
     viewToday();
     $$(".tabbar a").forEach(a => a.classList.toggle("active", a.dataset.tab === "heute"));
     if (route === "erfassen") openAdd(mealNow());
     if (route === "scannen") openScan(mealNow());
     if (route === "wiegen") openWeigh();
+    if (route === "sos") openSOS();
     return;
   }
   $$(".tabbar a").forEach(a => a.classList.toggle("active", a.dataset.tab === route));
   (routes[route] || viewToday)();
+  celebrate(pendingCelebrations());
 }
+$("#sos-top").onclick = () => openSOS();
 window.addEventListener("hashchange", () => { render(); window.scrollTo(0, 0); });
 
 function viewLogin() {
@@ -309,6 +313,8 @@ function viewToday() {
         return `<div class="${cls}${day === o.day ? " cur" : ""}" data-day="${day}">${wd}<b>${d && d.entries ? num.format(P ? d.points : d.kcal) : "–"}</b></div>`;
       }).join("")}</div>
     </div>
+    ${challengeHtml()}
+    ${levelHtml()}
     ${quickHtml()}
     ${MEALS.map(([key, label, icon]) => mealHtml(key, label, icon)).join("")}
     ${activityHtml()}
@@ -324,6 +330,7 @@ function viewToday() {
   }));
   $$("[data-quick]").forEach(bt => (bt.onclick = () => quickAdd(+bt.dataset.quick)));
   $$("[data-copy]").forEach(bt => (bt.onclick = () => copyMeal(bt.dataset.copy)));
+  bindChallenge();
   $("#act-card") && ($("#act-card").onclick = openSteps);
   $("#weigh-btn") && ($("#weigh-btn").onclick = e => { e.preventDefault(); openWeigh(); });
 }
@@ -402,6 +409,211 @@ function weightMiniHtml() {
     <div class="card-head"><h2>⚖️ ${num1.format(b.trend)} kg</h2><small>Trend${b.rate != null ? ` · ${fmtSigned(b.rate)} kg/Woche` : ""}</small></div>
     ${b.progress != null ? `<div class="progress"><i style="width:${b.progress * 100}%"></i></div><small>${num1.format(b.lost)} kg geschafft · Ziel ${num1.format(b.goal)} kg</small>` : ""}
     ${!b.weighed_today && weighDay ? `<div class="mt"><button class="btn small primary" id="weigh-btn">Heute wiegen</button></div>` : ""}</a>`;
+}
+
+/* ---------- Motivation: Level, Challenge, Abzeichen ---------- */
+
+function levelHtml() {
+  const m = S.motivation; if (!m) return "";
+  const x = m.xp;
+  return `<a class="card" href="#erfolge" style="display:block;text-decoration:none;color:inherit;padding:12px 16px">
+    <div class="spread"><b>🌱 Level ${x.level} · ${esc(x.name)}</b><small>${num.format(x.points)} XP${m.streak > 1 ? ` · 🔥 ${m.streak} Tage` : ""} ›</small></div>
+    <div class="progress"><i style="width:${(x.progress * 100).toFixed(1)}%"></i></div></a>`;
+}
+
+function challengeHtml() {
+  const c = S.motivation && S.motivation.challenge; if (!c) return "";
+  const left = Math.max(0, Math.round((new Date(c.ends + "T23:59:59") - Date.now()) / 86400e3));
+  return `<div class="card" style="padding:12px 16px${c.done ? ";border-color:var(--good)" : ""}">
+    <div class="spread"><b>${c.icon} ${esc(c.title)}</b><small>${c.done ? `✓ +${c.xp} XP` : `noch ${left} ${left === 1 ? "Tag" : "Tage"}`}</small></div>
+    <div class="progress${c.done ? " good" : ""}"><i style="width:${c.progress / c.target * 100}%"></i></div>
+    <div class="spread"><small class="muted">Wochen-Challenge · ${c.progress} von ${c.target} · zählt automatisch</small>
+      ${c.done ? "" : `<button class="btn small" id="ch-skip">Andere</button>`}</div></div>`;
+}
+function bindChallenge() {
+  $("#ch-skip") && ($("#ch-skip").onclick = async () => {
+    try { S = await api("/api/challenge/skip", { method: "POST" }); } catch (e) { return toast(e.message); }
+    viewToday();
+  });
+}
+
+function viewAchievements() {
+  const m = S.motivation, x = m.xp;
+  view.innerHTML = `<div class="card hero"><div class="big-emoji">🌱</div>
+      <h1>Level ${x.level} · ${esc(x.name)}</h1><p class="muted">${num.format(x.points)} XP · noch ${num.format(Math.max(0, x.high - x.points))} bis Level ${x.level + 1}</p>
+      <div class="progress"><i style="width:${x.progress * 100}%"></i></div>
+      <div class="tiles three mt"><div class="tile"><div class="v">🔥 ${m.streak}</div><div class="l">Tage in Folge</div></div>
+        <div class="tile"><div class="v">${m.best_streak}</div><div class="l">längste Serie</div></div>
+        <div class="tile"><div class="v">${m.challenges_done}</div><div class="l">Challenges geschafft</div></div></div></div>
+    ${challengeHtml()}
+    <div class="card"><h2>🏅 Abzeichen</h2><div class="badges">${m.badges.map(b => `<div class="badge${b.unlocked ? "" : " off"}" title="${esc(b.title)}">
+      <span class="e">${b.icon}</span>${esc(b.title)}${b.unlocked ? `<small class="muted">${fmtDay(b.unlocked.slice(0, 10), { day: "2-digit", month: "2-digit" })}</small>`
+        : `<div class="progress"><i style="width:${b.progress * 100}%"></i></div>`}</div>`).join("")}</div></div>
+    <div class="card"><h2>So entstehen die XP</h2><ul class="list">${x.parts.map(p => `<li><div class="bd"><b>${esc(p.label)}</b><div class="meta">${num.format(p.count)} × ${p.each} XP</div></div><span class="val">${num.format(p.xp)}</span></li>`).join("")}</ul></div>`;
+  bindChallenge();
+}
+
+/* Konfetti bei neuem Abzeichen, Level-Aufstieg und geschaffter Challenge */
+function pendingCelebrations() {
+  const m = S.motivation; if (!m) return [];
+  const unlocked = m.badges.filter(b => b.unlocked).map(b => b.id);
+  const ch = m.challenge && m.challenge.done ? `${m.challenge.week}:${m.challenge.id}` : null;
+  const seen = store("fp_seen");
+  const now = { unlocked, level: m.xp.level, challenges: ch ? [ch] : [] };
+  if (!seen) { store("fp_seen", now); return []; }   // erster Start: nichts nachholen
+  const out = [];
+  unlocked.filter(id => !seen.unlocked.includes(id)).forEach(id => {
+    const b = m.badges.find(x => x.id === id); out.push({ icon: b.icon, title: b.title, text: "Neues Abzeichen!" });
+  });
+  if (m.xp.level > (seen.level || 1)) out.push({ icon: "🌱", title: `Level ${m.xp.level}: ${m.xp.name}`, text: "Du kommst voran. Weiter so!" });
+  if (ch && !(seen.challenges || []).includes(ch)) out.push({ icon: "🏁", title: "Challenge geschafft!", text: `${m.challenge.title} · +${m.challenge.xp} XP` });
+  store("fp_seen", { unlocked, level: Math.max(now.level, seen.level || 1), challenges: [...new Set([...(seen.challenges || []), ...now.challenges])].slice(-30) });
+  return out;
+}
+function celebrate(items) {
+  if (!items.length || $(".celebrate")) return;
+  const [it, ...rest] = items;
+  const wrap = document.createElement("div");
+  wrap.className = "celebrate";
+  wrap.innerHTML = `<canvas></canvas><div class="celebrate-card"><div class="big-emoji">${it.icon}</div><h1>${esc(it.title)}</h1>
+    <p class="muted">${esc(it.text)}</p><button class="btn primary block mt">Weiter</button></div>`;
+  document.body.appendChild(wrap);
+  vibrate([80, 50, 80, 50, 160]);
+  const canvas = wrap.querySelector("canvas"), ctx = canvas.getContext("2d");
+  const W = canvas.width = innerWidth * devicePixelRatio, H = canvas.height = innerHeight * devicePixelRatio;
+  const colors = ["#ff8a3d", "#4ade80", "#fbbf24", "#f87171", "#60a5fa", "#a78bfa"];
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const parts = reduce ? [] : Array.from({ length: 160 }, () => ({
+    x: W / 2 + (Math.random() - .5) * W * .2, y: H * .35, vx: (Math.random() - .5) * 26 * devicePixelRatio,
+    vy: (-Math.random() * 22 - 6) * devicePixelRatio, s: (5 + Math.random() * 6) * devicePixelRatio,
+    r: Math.random() * 6, vr: (Math.random() - .5) * .4, c: colors[Math.floor(Math.random() * colors.length)] }));
+  let frame = 0, raf;
+  const tick = () => {
+    ctx.clearRect(0, 0, W, H);
+    parts.forEach(p => {
+      p.vy += .55 * devicePixelRatio; p.vx *= .99; p.x += p.vx; p.y += p.vy; p.r += p.vr;
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r); ctx.fillStyle = p.c; ctx.fillRect(-p.s / 2, -p.s / 4, p.s, p.s / 2); ctx.restore();
+    });
+    if (++frame < 220) raf = requestAnimationFrame(tick);
+  };
+  if (parts.length) tick();
+  wrap.querySelector("button").onclick = () => { cancelAnimationFrame(raf); wrap.remove(); celebrate(rest); };
+}
+
+/* ---------- Heißhunger-SOS ---------- */
+
+const SOS_TIPS = ["Ein großes Glas Wasser trinken – Durst fühlt sich oft wie Hunger an.", "Zähne putzen: danach schmeckt Süßes kaum.",
+  "Zehn Minuten raus an die Luft oder einmal um den Block.", "Einen Tee kochen und bewusst trinken.", "Jemanden anrufen oder eine Nachricht schreiben.",
+  "Hände beschäftigen: aufräumen, abwaschen, ein Rätsel.", "Heißhunger ist eine Welle: Sie steigt, erreicht einen Gipfel und ebbt nach wenigen Minuten ab.",
+  "Wenn doch etwas: Obst oder Gemüse kosten 0 Punkte."];
+
+function openSOS() {
+  const s = S.settings, triggers = s.craving_triggers || [];
+  const id = uuid(), started = Date.now(), total = 600;
+  let timer = null, trigger = null, intensity = 6;
+  const save = async resisted => {
+    const body = { id, kind: "craving", trigger, intensity, resisted, duration_s: Math.round((Date.now() - started) / 1000) };
+    try { S = await api("/api/events", { method: "POST", body }); } catch (e) { toast(e.message); }
+  };
+  openSheet(`<h2>🍫 Heißhunger</h2>
+    <p class="muted">Was ist gerade los?</p>
+    ${chipGroup("trig", triggers.map(t => [t, esc(t)]), null)}
+    <label class="f"><span>Wie stark? <b id="int-v">${intensity}</b> von 10</span><input type="range" min="1" max="10" value="${intensity}" id="int"></label>
+    <div id="sos-plan"></div>
+    <div class="center"><div class="ring">${ringSvg(1, false)}<div class="t"><b id="sos-clock">10:00</b><span>Welle aussitzen</span></div></div></div>
+    <p class="center" id="sos-tip">${esc(SOS_TIPS[0])}</p>
+    <div class="row nowrap mt"><button class="btn grow" id="sos-ate">Doch gegessen</button><button class="btn primary grow" id="sos-ok">💪 Geschafft</button></div>`, root => {
+    const showPlan = () => {
+      const plan = trigger && (s.plans || {})[trigger];
+      $("#sos-plan", root).innerHTML = trigger ? (plan ? `<div class="card" style="border-color:var(--accent)"><small class="muted">Dein Plan bei ${esc(trigger)}</small><p><b>${esc(plan)}</b></p></div>`
+        : `<p class="note">Noch kein Plan für ${esc(trigger)} – unter <b>Mehr → Wenn-Dann-Pläne</b> anlegen.</p>`) : "";
+    };
+    bindChips(root, (_, v) => { trigger = v; showPlan(); });
+    $("#int", root).oninput = e => { intensity = +e.target.value; $("#int-v", root).textContent = intensity; };
+    let tip = 0;
+    timer = setInterval(() => {
+      const left = Math.max(0, total - Math.round((Date.now() - started) / 1000));
+      $("#sos-clock", root).textContent = `${pad(Math.floor(left / 60))}:${pad(left % 60)}`;
+      $(".ring", root).firstElementChild.outerHTML = ringSvg(left / total, false);
+      if ((total - left) % 30 === 0 && left < total) $("#sos-tip", root).textContent = SOS_TIPS[++tip % SOS_TIPS.length];
+      if (!left) { clearInterval(timer); vibrate([100, 50, 100]); $("#sos-tip", root).textContent = "Zehn Minuten geschafft – die Welle ist vorbei. Wie geht's dir jetzt?"; }
+    }, 1000);
+    sheetCleanup = () => clearInterval(timer);
+    $("#sos-ok", root).onclick = async () => { await save(true); closeSheet(); viewToday(); toast("Stark! +15 XP 💪"); celebrate(pendingCelebrations()); };
+    $("#sos-ate", root).onclick = async () => { await save(false); closeSheet(); viewToday(); toast("Kein Drama. Trag's ein, dann bleibt die Übersicht ehrlich."); openAdd("snack"); };
+  });
+}
+
+function plansHtml(s) {
+  return (s.craving_triggers || []).map(t => `<div class="row nowrap" style="margin:6px 0"><label class="f grow" style="margin:0"><span>Wenn <b>${esc(t)}</b>, dann …</span>
+    <input type="text" data-plan="${esc(t)}" value="${esc((s.plans || {})[t] || "")}" maxlength="200"></label>
+    <button class="btn icon small-icon" data-rmtrig="${esc(t)}" aria-label="Auslöser entfernen" style="align-self:flex-end">✕</button></div>`).join("");
+}
+function bindPlans() {
+  const collect = () => ({
+    craving_triggers: $$("[data-plan]").map(i => i.dataset.plan),
+    plans: Object.fromEntries($$("[data-plan]").map(i => [i.dataset.plan, i.value.trim()]).filter(([, v]) => v)),
+  });
+  const redraw = data => { $("#plans").innerHTML = plansHtml({ ...S.settings, ...data }); bindRm(); };
+  const bindRm = () => $$("[data-rmtrig]").forEach(b => (b.onclick = () => {
+    const c = collect(); c.craving_triggers = c.craving_triggers.filter(t => t !== b.dataset.rmtrig); delete c.plans[b.dataset.rmtrig]; redraw(c);
+  }));
+  bindRm();
+  $("#add-trigger").onclick = () => {
+    const t = $("#new-trigger").value.trim(); if (!t) return;
+    const c = collect(); if (!c.craving_triggers.includes(t)) c.craving_triggers.push(t);
+    $("#new-trigger").value = ""; redraw(c);
+  };
+  $("#plans-save").onclick = async () => {
+    try { S = await api("/api/settings", { method: "PUT", body: collect() }); toast("Pläne gespeichert"); } catch (e) { toast(e.message); }
+  };
+}
+
+/* ---------- Statistik: BMI und Heißhunger ---------- */
+
+const BMI_CLASSES = [[0, 18.5, "Untergewicht", "var(--warn)"], [18.5, 25, "Normalgewicht", "var(--good)"], [25, 30, "Übergewicht", "var(--warn)"],
+  [30, 35, "Adipositas Grad I", "var(--bad)"], [35, 40, "Adipositas Grad II", "var(--bad)"], [40, 99, "Adipositas Grad III", "var(--bad)"]];
+function bmiClass(v) { return BMI_CLASSES.find(([lo, hi]) => v >= lo && v < hi) || BMI_CLASSES[BMI_CLASSES.length - 1]; }
+
+function bmiHtml(weights) {
+  const h = (S.settings.height_cm || 0) / 100, b = S.body;
+  if (!h || !b || !b.bmi) return "";
+  const bmi = b.bmi, goalBmi = b.goal ? b.goal / (h * h) : null, c = bmiClass(bmi);
+  const pos = v => Math.max(0, Math.min(100, (v - 15) / 25 * 100));   // Skala 15 … 40
+  const seg = BMI_CLASSES.filter(([lo]) => lo < 40).map(([lo, hi, , col]) => `<i style="left:${pos(Math.max(lo, 15))}%;width:${pos(Math.min(hi, 40)) - pos(Math.max(lo, 15))}%;background:${col}"></i>`).join("");
+  const series = weights.map(w => ({ day: w.day, bmi: Math.round(w.trend / (h * h) * 10) / 10 }));
+  const n25 = (25 * h * h).toFixed(1).replace(".", ",");
+  return `<div class="card"><div class="card-head"><h2>📏 BMI</h2><small>Größe ${num.format(S.settings.height_cm)} cm</small></div>
+    <div class="spread"><div><div style="font-size:2rem;font-weight:800">${num1.format(bmi)}</div><small style="color:${c[3]}">${c[2]}</small></div>
+      ${goalBmi ? `<div style="text-align:right"><div style="font-size:1.2rem;font-weight:700">${num1.format(goalBmi)}</div><small class="muted">beim Zielgewicht ${num1.format(b.goal)} kg</small></div>` : ""}</div>
+    <div class="bmi-scale">${seg}<b style="left:${pos(bmi)}%"></b>${goalBmi ? `<u style="left:${pos(goalBmi)}%"></u>` : ""}</div>
+    <div class="spread note" style="font-size:.72rem"><span>15</span><span>18,5</span><span>25</span><span>30</span><span>35</span><span>40</span></div>
+    ${series.length >= 2 ? chartBMI(series) : ""}
+    <p class="note">Normalgewicht (BMI unter 25) beginnt bei deiner Größe unter ${n25} kg. Der BMI berücksichtigt keine Muskelmasse und ist nur ein grober Richtwert (Einteilung nach WHO).</p></div>`;
+}
+
+function chartBMI(series) {
+  const W = 340, H = 120, P = 30;
+  const vals = series.map(s => s.bmi);
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  if (hi - lo < 1) { lo -= .5; hi += .5; }
+  const t0 = new Date(series[0].day).getTime(), t1 = new Date(series[series.length - 1].day).getTime() || t0 + 1;
+  const X = d => P + (new Date(d).getTime() - t0) / Math.max(t1 - t0, 1) * (W - P - 6), Y = v => 8 + (hi - v) / (hi - lo) * (H - 24);
+  const path = series.map((s, i) => `${i ? "L" : "M"}${X(s.day).toFixed(1)},${Y(s.bmi).toFixed(1)}`).join("");
+  const lines = [25, 30, 35].filter(v => v > lo && v < hi).map(v => `<line x1="${P}" x2="${W}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="var(--warn)" stroke-dasharray="4 3"/><text x="0" y="${(Y(v) + 3).toFixed(1)}">${v}</text>`).join("");
+  return `<svg class="chart mt" viewBox="0 0 ${W} ${H}" role="img" aria-label="BMI-Verlauf">
+    <text x="0" y="12">${num1.format(hi)}</text><text x="0" y="${H - 12}">${num1.format(lo)}</text>${lines}
+    <path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+}
+
+function cravingHtml(c) {
+  if (!c || !c.total) return `<div class="card"><div class="card-head"><h2>🍫 Heißhunger</h2></div>
+    <p class="note">Noch kein Heißhunger erfasst. Wenn er kommt: oben auf <b>🍫 SOS</b> – Plan, 10-Minuten-Timer, und die App lernt deine kritischen Zeiten.</p></div>`;
+  const rate = Math.round(c.resisted / c.total * 100);
+  return `<div class="card"><div class="card-head"><h2>🍫 Heißhunger</h2><small>${c.resisted} von ${c.total} überstanden</small></div>
+    <div class="progress good"><i style="width:${rate}%"></i></div><small>${rate} % ausgesessen</small>
+    ${c.triggers.length ? `<ul class="list mt">${c.triggers.map(t => `<li><div class="bd"><b>${esc(t.trigger)}</b><div class="meta">${t.count}× · ${t.resisted} überstanden</div></div></li>`).join("")}</ul>` : ""}
+    ${c.hours.length ? `<p class="note">Typische Zeiten: ${c.hours.map(h => `${h.hour}–${h.hour + 1} Uhr`).join(", ")}.${S.settings.snack_push ? " FitPath erinnert etwa 15 Minuten vorher." : ""}</p>` : ""}</div>`;
 }
 
 /* ---------- Erfassen: Suche ---------- */
@@ -863,6 +1075,7 @@ async function viewWeight() {
       <div class="progress"><i style="width:${b.progress * 100}%"></i></div>
       <div class="chips mt">${b.milestones.map(m => `<span class="pill${m.done ? " good" : ""}">${m.done ? "✓ " : ""}${m.goal ? "Ziel" : `−${m.pct} %`} · ${num1.format(m.kg)} kg</span>`).join("")}</div>
       <p class="note">Schon −5 % Körpergewicht senken Blutdruck und Blutzucker messbar.</p></div>` : ""}
+    <div id="bmi"></div>
     <div class="card"><div class="card-head"><h2>📈 Verlauf</h2></div>
       <div class="tabs" id="wr">${[30, 90, 365].map(d => `<button data-d="${d}" class="${weightRange === d ? "on" : ""}">${d === 365 ? "1 Jahr" : d + " Tage"}</button>`).join("")}</div>
       <div id="wchart"><div class="empty">Lade …</div></div>
@@ -873,6 +1086,7 @@ async function viewWeight() {
   let data;
   try { data = await api(`/api/body?days=${weightRange}`); } catch (_) { $("#wchart").innerHTML = `<div class="empty">Offline</div>`; return; }
   $("#wchart").innerHTML = chartWeight(data.series, b.goal);
+  $("#bmi").outerHTML = bmiHtml(data.series) || "<div></div>";
   const icons = { manual: "✋", hc: "📲" }, labels = { weight: "kg", fat: "% Fett", waist: "cm Bauch" };
   $("#wlist").innerHTML = data.entries.length ? `<ul class="list">${data.entries.slice(0, 40).map(e => `<li><span class="ic">${icons[e.source] || ""}</span>
     <div class="bd"><b>${num1.format(e.value)} ${labels[e.kind]}</b><div class="meta">${fmtDay(e.day, { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" })}${e.source === "hc" ? " · Health Connect" : ""}</div></div>
@@ -931,6 +1145,7 @@ async function viewStats() {
       <div class="stack"><i style="width:${d.ampel.green * 100}%;background:var(--good)"></i><i style="width:${d.ampel.yellow * 100}%;background:var(--warn)"></i><i style="width:${d.ampel.red * 100}%;background:var(--bad)"></i></div>
       <div class="legend"><span><i style="background:var(--good)"></i>leicht ${Math.round(d.ampel.green * 100)} %</span><span><i style="background:var(--warn)"></i>mittel ${Math.round(d.ampel.yellow * 100)} %</span><span><i style="background:var(--bad)"></i>dicht ${Math.round(d.ampel.red * 100)} %</span></div>
       <p class="note">Leichte Lebensmittel (viel Wasser und Ballaststoffe) füllen den Magen mit wenig Energie.</p></div>
+    ${cravingHtml(d.cravings)}
     <div class="card"><div class="card-head"><h2>🏆 Größte Punkte-Lieferanten</h2></div>
       ${d.top.length ? `<ul class="list">${d.top.map(x => `<li><div class="bd"><b>${esc(x.name)}</b><div class="meta">${x.count}× · ${num.format(x.kcal)} kcal</div></div><span class="val">${P ? x.points + " P" : num.format(x.kcal) + " kcal"}</span></li>`).join("")}</ul>` : `<div class="empty">Noch keine Einträge.</div>`}</div>
     <div class="card"><div class="card-head"><h2>👟 Schritte</h2><small>Ziel ${num.format(S.settings.steps_goal)}</small></div>${chartSteps(d.days, S.settings.steps_goal)}</div>`;
@@ -998,6 +1213,7 @@ async function viewMore() {
       <p id="push-state" class="note">…</p>
       <div class="row"><button class="btn small primary" id="push-on">Auf diesem Gerät aktivieren</button><button class="btn small" id="push-test">Test</button></div>
       <label class="switch"><span>Erinnerungen senden</span><input type="checkbox" id="p-en" ${s.push_enabled ? "checked" : ""}></label>
+      <label class="switch"><span>Vor typischen Snack-Zeiten erinnern<br><small class="muted">lernt aus Snack-Einträgen und Heißhunger der letzten 3 Wochen</small></span><input type="checkbox" id="p-snack" ${s.snack_push ? "checked" : ""}></label>
       <label class="f"><span>Wiegen an</span></label>${chipGroup("weigh_days", WEEKDAYS.map((d, i) => [i, d]), s.weigh_days, true)}
       <div class="grid3"><label class="f"><span>Wiegen um</span>${timeField("p-weigh", s.weigh_time)}</label>
         <label class="f"><span>Nichts erfasst um</span>${timeField("p-lunch", s.lunch_reminder, true)}</label>
@@ -1007,6 +1223,11 @@ async function viewMore() {
         <label class="f"><span>Höchstens/Tag</span><input type="number" id="p-max" value="${s.push_max_per_day}" min="0" max="10"></label></div>
       <p class="note">Uhrzeiten im 24-Stunden-Format, z. B. 07:30 oder 2030. Leer = Erinnerung aus.</p>
       <button class="btn small" id="p-save">Speichern</button></div>
+    <div class="card"><div class="card-head"><h2>🧭 Wenn-Dann-Pläne</h2><a class="btn small" href="#erfolge">🏅 Erfolge</a></div>
+      <p class="note">Für jeden Heißhunger-Auslöser eine feste Ersatzhandlung. Im SOS erscheint der passende Plan.</p>
+      <div id="plans">${plansHtml(s)}</div>
+      <div class="row nowrap mt"><input type="text" id="new-trigger" class="grow" maxlength="40" placeholder="Neuer Auslöser, z. B. Feierabend"><button class="btn small" id="add-trigger">+</button></div>
+      <button class="btn small mt" id="plans-save">Speichern</button></div>
     <div class="card"><div class="card-head"><h2>📱 Geräte</h2><button class="btn small" id="dev-link">Neues verbinden</button></div><div id="devs"></div></div>
     <div class="card"><h2>💾 Daten</h2><a class="btn small" href="/api/export">Export als JSON</a></div>
     <div class="card"><div class="card-head"><h2>ℹ️ Quellen</h2><span class="pill">FitPath ${esc(S.version || "")}</span></div>
@@ -1017,6 +1238,7 @@ async function viewMore() {
     if (group === "display") { S = await api("/api/settings", { method: "PUT", body: { display: val } }); toast(val === "kcal" ? "Anzeige in kcal" : "Anzeige in Punkten"); }
   });
   $("#edit-goals").onclick = openGoals;
+  bindPlans();
   $("#s-save").onclick = async () => {
     try { S = await api("/api/settings", { method: "PUT", body: { steps_baseline: +$("#s-base").value, steps_goal: +$("#s-goal").value } }); toast("Gespeichert"); }
     catch (e) { toast(e.message); }
@@ -1030,7 +1252,7 @@ async function viewMore() {
     }
     try {
       S = await api("/api/settings", { method: "PUT", body: {
-        push_enabled: $("#p-en").checked, weigh_days: chipVal(view, "weigh_days").map(Number), ...times,
+        push_enabled: $("#p-en").checked, snack_push: $("#p-snack").checked, weigh_days: chipVal(view, "weigh_days").map(Number), ...times,
         push_max_per_day: +$("#p-max").value } });
       toast("Gespeichert");
     } catch (e) { toast(e.message); }
@@ -1252,5 +1474,7 @@ document.addEventListener("visibilitychange", async () => {
 });
 
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+/* Version neben dem Logo: aus /healthz, das geht auch ohne Anmeldung */
+fetch("/healthz").then(r => r.json()).then(h => { if (h.version) $("#app-ver").textContent = "v" + h.version; }).catch(() => {});
 setNet();
 flushQueue().finally(render);

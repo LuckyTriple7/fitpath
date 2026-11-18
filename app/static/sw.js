@@ -1,5 +1,5 @@
 /* FitPath Service Worker: App-Hülle offline, Push */
-const VERSION = "fp-v3";
+const VERSION = "fp-v4";
 const SHELL = ["/", "/app.js", "/styles.css", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png"];
 
 self.addEventListener("install", e => {

@@ -67,17 +67,23 @@ git push --follow-tags            # GitHub testet, prüft Tag = Version, baut da
 
 | Bereich | Inhalt |
 |---|---|
-| Heute | Ring mit übrigen Punkten (oder kcal), Budget, Aktivitätspunkte, Wochenreserve, Wochenleiste Mo–So, Mahlzeiten (Frühstück, Mittag, Abend, Snacks), „Nochmal“-Leiste (ein Tipp erfasst die zuletzt gegessene Menge), Schritte, Trendgewicht, Tage vor und zurück |
+| Heute | Ring mit übrigen Punkten (oder kcal), Budget, Aktivitätspunkte, Wochenreserve, Wochenleiste Mo–So, Mahlzeiten (Frühstück, Mittag, Abend, Snacks), „Nochmal“-Leiste (ein Tipp erfasst die zuletzt gegessene Menge), Wochen-Challenge, Level, Schritte, Trendgewicht, Tage vor und zurück. Oben neben dem Logo steht die Version |
 | Erfassen | Suche in rund 7.140 BLS-Lebensmitteln plus eigenen, Listen „Zuletzt“, „Favoriten“, „Eigene“, Barcode per Kamera (`BarcodeDetector` in Chrome für Android, sonst Zahl eintippen), Portionen (Scheibe, Stück, Glas …) mit Anzahl, Live-Vorschau mit Erklärung der Punkte, eigene Portionen merken, 0-Punkte-Schalter je Lebensmittel |
 | Eigene Lebensmittel | Nährwerte je 100 g von der Packung, optional mit Barcode; unbekannte Barcodes landen direkt im Formular |
 | Wie gestern | Leere Mahlzeit zeigt „Gestern: …“ mit Knopf **↺ Wie gestern**: übernimmt alle Einträge dieser Mahlzeit vom Vortag, mit „Rückgängig“ |
 | Gerichte | Aus Zutaten (Suche, Gramm je Zutat), Portionen, optional Gewicht nach dem Kochen; erscheint in Suche und unter „Eigene“ und wird wie ein Lebensmittel erfasst. 0-Punkte-Zutaten bleiben 0 Punkte |
 | Per Text (KI) | ✨ im Erfassen-Blatt: „2 Brötchen mit Butter und Gouda, Kaffee mit Milch“ → KI zerlegt in Lebensmittel mit Menge, FitPath schlägt je Posten 5 Treffer aus der eigenen DB vor; Auswahl, Gramm und Mahlzeit änderbar, erfasst wird erst nach Bestätigung |
-| Gewicht | Trendgewicht (geglättet), Tempo kg/Woche, BMI, Ziel mit Meilensteinen (−5 %, −10 %), Verlauf 30/90/365 Tage, Körperfett und Bauchumfang |
-| Statistik | Punkte oder kcal pro Tag gegen Budget, Tage im Budget, Ø Eiweiß/Ballaststoffe mit Richtwert, Energiedichte-Ampel, größte Punkte-Lieferanten, Schritte |
+| Gewicht | Trendgewicht (geglättet), Tempo kg/Woche, Ziel mit Meilensteinen (−5 %, −10 %), BMI mit WHO-Skala, Verlauf und BMI beim Zielgewicht, Verlauf 30/90/365 Tage, Körperfett und Bauchumfang |
+| Motivation | Level und Erfahrungspunkte, 16 Abzeichen (Tage in Folge, Tage im Budget, Schrittziel, −2/−5/−10 %, Zielgewicht …), Wochen-Challenge mit automatischer Zählung und „Andere“, Konfetti bei neuem Abzeichen, Level oder geschaffter Challenge; Übersicht unter **Erfolge** (Mehr → Wenn-Dann-Pläne → 🏅 oder Level-Karte auf Heute) |
+| Heißhunger-SOS | Knopf **🍫 SOS** oben: Auslöser wählen, Stärke, eigener Wenn-Dann-Plan, 10-Minuten-Timer mit Tipps, „Geschafft“ (+15 XP) oder „Doch gegessen“ (öffnet das Erfassen); Pläne und Auslöser unter **Mehr → Wenn-Dann-Pläne** |
+| Statistik | Punkte oder kcal pro Tag gegen Budget, Tage im Budget, Ø Eiweiß/Ballaststoffe mit Richtwert, Energiedichte-Ampel, Heißhunger (überstanden, Auslöser, typische Uhrzeiten), größte Punkte-Lieferanten, Schritte |
 | Health Connect | Webhook für Life Dashboard Companion: Schritte (Tagessummen), Gewicht, Körperfett, Löschungen, Verlauf nachladen |
-| Push | Wiegen (Wochentage wählbar), „noch nichts erfasst“ am Mittag, Abend-Check; Ruhezeiten und Höchstzahl pro Tag |
+| Push | Wiegen (Wochentage wählbar), „noch nichts erfasst“ am Mittag, etwa 15 Minuten vor typischen Snack-Uhrzeiten (gelernt aus Snack-Einträgen und Heißhunger der letzten 3 Wochen, ab 3 Tagen je Stunde), Abend-Check; Ruhezeiten und Höchstzahl pro Tag |
 | Offline | App-Hülle und letzter Zustand aus dem Cache, Einträge warten in einer Warteschlange |
+
+## Motivation
+
+Erfahrungspunkte entstehen aus den Daten selbst: je erfasstem Tag 10, je Tag im Budget 10 (abgeschlossene Tage), je Tag mit erreichtem Schrittziel 10, je Wiegetag 5, je überstandenem Heißhunger 15, je Abzeichen 50, je geschaffter Wochen-Challenge 50. Ein einmal erreichtes Abzeichen bleibt, auch wenn z. B. das Gewicht später wieder steigt (gespeichert in `unlocked`). Die Wochen-Challenge wechselt jede Woche (Montag), „Andere“ zieht die nächste; geschafft ist sie, sobald die Zählung das Ziel erreicht.
 
 ## Punktesystem
 
@@ -165,6 +171,7 @@ Uhrzeiten und Zahlen gibt die App unabhängig von der Browsersprache ein: Uhrzei
 | `app/foods.py` | BLS-Import, Suche, Portionen, eigene Lebensmittel, Open-Food-Facts-Barcodes |
 | `app/diary.py` | Tagessummen, Übersicht „Heute“, Verlauf für die Statistik |
 | `app/body.py` | Trendgewicht, Tempo, Meilensteine |
+| `app/motivation.py` | XP, Level, Abzeichen, Wochen-Challenge, Heißhunger-Auswertung, Snack-Uhrzeiten |
 | `app/ingest.py` | Health-Connect-Webhook, Koppel-Link, Diagnose |
 | `app/ai.py` | Erfassen per Text über LiteLLM |
 | `app/push.py` | VAPID (erzeugt beim ersten Start), Erinnerungen alle 5 Minuten |

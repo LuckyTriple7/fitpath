@@ -12,7 +12,7 @@ from datetime import timedelta
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 
-from . import __version__, ai, auth, backup, body, db, diary, foods, ingest, points, push
+from . import __version__, ai, auth, backup, body, db, diary, foods, ingest, motivation, points, push
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 MAX_INGEST_BYTES = 12 * 1024 * 1024
@@ -185,6 +185,10 @@ VALIDATORS = {
     "weigh_days": lambda v: sorted({int(x) for x in list(v) if 0 <= int(x) <= 6}),
     "lunch_reminder": lambda v: _clean_time(v) if v else "",
     "evening_time": lambda v: _clean_time(v) if v else "",
+    "snack_push": bool,
+    "craving_triggers": lambda v: [t for t in dict.fromkeys(_clean_text(x, 40) for x in list(v)[:20]) if t],
+    "plans": lambda v: {_clean_text(k, 40): _clean_text(t, 200) for k, t in list(dict(v).items())[:20]
+                        if _clean_text(k, 40) and _clean_text(t, 200)},
 }
 
 
@@ -205,6 +209,7 @@ def _state(conn, day: str | None = None) -> dict:
         "settings": db.public_settings(s),
         "today": db.today(),
         "overview": diary.overview(conn, s, day),
+        "motivation": motivation.state(conn, s),
         "body": body.summary(conn, s),
         "recent": foods.recent(conn, 12),
         "vapid_key": push.public_key(),
@@ -521,7 +526,63 @@ async def activity_add(request: Request, device=Depends(auth.require)):
 @app.get("/api/stats")
 def stats(days: int = 30, device=Depends(auth.require)):
     with db.connect() as conn:
-        return diary.history(conn, db.get_settings(conn), max(7, min(days, 365)))
+        d = diary.history(conn, db.get_settings(conn), max(7, min(days, 365)))
+        d["cravings"] = motivation.craving_stats(conn, d["days"][0]["day"])
+        return d
+
+
+# ---------- Motivation: Heißhunger und Challenge ----------
+
+def _clean_event(data: dict) -> dict:
+    if data.get("kind") != "craving":
+        raise HTTPException(400, "kind ungültig")
+    ts = db.now_utc()
+    if data.get("ts"):
+        try:
+            ts = db.parse(str(data["ts"]))
+        except ValueError:
+            raise HTTPException(400, "Zeit ungültig")
+    def num(k, lo, hi):
+        v = data.get(k)
+        return max(lo, min(int(v), hi)) if v not in (None, "") else None
+    return {"id": _clean_text(data.get("id"), 40) or str(uuid.uuid4()), "ts": db.iso(ts), "kind": "craving",
+            "trigger": _clean_text(data.get("trigger"), 40) or None, "intensity": num("intensity", 1, 10),
+            "resisted": None if data.get("resisted") is None else (1 if data["resisted"] else 0),
+            "duration_s": num("duration_s", 0, 86400), "created": db.iso(db.now_utc())}
+
+
+@app.post("/api/events")
+async def event_add(request: Request, device=Depends(auth.require)):
+    """Heißhunger (SOS). Gleiche id = ändern."""
+    e = _clean_event(await request.json())
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT INTO events (id, ts, kind, trigger, intensity, resisted, duration_s, created) VALUES "
+            "(:id, :ts, :kind, :trigger, :intensity, :resisted, :duration_s, :created) ON CONFLICT(id) DO UPDATE SET "
+            "trigger = excluded.trigger, intensity = excluded.intensity, resisted = excluded.resisted, "
+            "duration_s = excluded.duration_s", e)
+        return _state(conn)
+
+
+@app.get("/api/events")
+def event_list(days: int = 30, device=Depends(auth.require)):
+    with db.connect() as conn:
+        since = db.iso(db.now_utc() - timedelta(days=max(1, min(days, 3650))))
+        return [dict(r) for r in conn.execute("SELECT * FROM events WHERE ts >= ? ORDER BY ts DESC LIMIT 500", (since,))]
+
+
+@app.delete("/api/events/{eid}")
+def event_delete(eid: str, device=Depends(auth.require)):
+    with db.connect() as conn:
+        conn.execute("DELETE FROM events WHERE id = ?", (eid,))
+        return _state(conn)
+
+
+@app.post("/api/challenge/skip")
+def challenge_skip(device=Depends(auth.require)):
+    with db.connect() as conn:
+        motivation.skip_challenge(conn, db.get_settings(conn))
+        return _state(conn)
 
 
 # ---------- Health Connect (Life Dashboard Companion) ----------
@@ -663,6 +724,7 @@ def export(device=Depends(auth.require)):
             "food_log": [dict(r) for r in conn.execute("SELECT * FROM food_log ORDER BY ts")],
             "body": [dict(r) for r in conn.execute("SELECT * FROM body ORDER BY ts")],
             "activity": [dict(r) for r in conn.execute("SELECT * FROM activity ORDER BY day")],
+            "events": [dict(r) for r in conn.execute("SELECT * FROM events ORDER BY ts")],
             "foods_own": [dict(r) for r in conn.execute(
                 "SELECT * FROM foods WHERE source IN ('custom', 'off') OR fav = 1 OR zero_user IS NOT NULL "
                 "OR portions IS NOT NULL ORDER BY id")],

@@ -276,3 +276,26 @@ details.more[open] summary::before { content: "▾ "; }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
+/* Motivation */
+.sos-top { border: 0; background: var(--card-2); color: var(--text); border-radius: 99px; padding: 6px 12px; font-weight: 700; cursor: pointer; }
+.badges { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; }
+.badge { text-align: center; background: var(--card-2); border-radius: 14px; padding: 12px 6px; font-size: .8rem; display: flex; flex-direction: column; gap: 4px; }
+.badge .e { font-size: 1.8rem; }
+.badge.off { opacity: .5; filter: grayscale(1); }
+.badge .progress { height: 5px; margin: 4px 4px 0; }
+.celebrate { position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, .55); display: flex; align-items: center; justify-content: center; padding: 16px; animation: fade .2s ease-out; }
+.celebrate canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.celebrate-card { position: relative; background: var(--card); border-radius: 24px; padding: 28px 20px 20px; max-width: 360px; width: 100%; text-align: center; box-shadow: var(--shadow); animation: pop .35s cubic-bezier(.2, 1.4, .4, 1); }
+.celebrate-card .big-emoji { font-size: 4rem; }
+@keyframes pop { from { transform: scale(.7); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+input[type=range] { width: 100%; accent-color: var(--accent); height: 36px; }
+/* BMI-Skala */
+.bmi-scale { position: relative; height: 12px; border-radius: 99px; overflow: visible; background: var(--card-2); margin: 14px 0 4px; }
+.bmi-scale i { position: absolute; top: 0; height: 100%; opacity: .85; }
+.bmi-scale i:first-child { border-radius: 99px 0 0 99px; }
+.bmi-scale i:last-of-type { border-radius: 0 99px 99px 0; }
+.bmi-scale b { position: absolute; top: -5px; width: 4px; height: 22px; margin-left: -2px; background: var(--text); border-radius: 2px; }
+.bmi-scale u { position: absolute; top: -3px; width: 0; height: 0; margin-left: -6px; border: 6px solid transparent; border-top-color: var(--text); text-decoration: none; }
+.brand .ver { font-weight: 500; font-size: .75rem; color: var(--muted); margin-left: -4px; align-self: flex-end; padding-bottom: 3px; }

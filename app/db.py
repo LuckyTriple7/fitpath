@@ -90,6 +90,18 @@ CREATE TABLE IF NOT EXISTS link_tokens (
 CREATE TABLE IF NOT EXISTS push_subs (
     endpoint TEXT PRIMARY KEY, p256dh TEXT NOT NULL, auth TEXT NOT NULL,
     device_id INTEGER, created TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS events (
+    id TEXT PRIMARY KEY,               -- UUID vom Gerät
+    ts TEXT NOT NULL,
+    kind TEXT NOT NULL,                -- craving (Heißhunger)
+    trigger TEXT,
+    intensity INTEGER,                 -- 1–10
+    resisted INTEGER,                  -- 1 überstanden, 0 gegessen
+    duration_s INTEGER,
+    created TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS events_ts ON events (ts);
+
 CREATE TABLE IF NOT EXISTS push_log (
     id INTEGER PRIMARY KEY, ts TEXT NOT NULL, kind TEXT NOT NULL, slot TEXT UNIQUE);
 """
@@ -122,6 +134,22 @@ DEFAULTS = {
     "weigh_days": [0, 3],       # Mo und Do; leer = keine Erinnerung
     "lunch_reminder": "14:00",
     "evening_time": "20:30",
+    "snack_push": True,         # Erinnerung 15 Minuten vor den typischen Snack-Uhrzeiten
+    # Motivation
+    "craving_triggers": ["Stress", "Langeweile", "Abends vor dem Fernseher", "Nach dem Essen", "Müdigkeit",
+                         "Frust", "Gesellschaft", "Süßes gesehen"],
+    "plans": {
+        "Stress": "Erst 10 tiefe Atemzüge, dann ein Glas Wasser",
+        "Langeweile": "10 Minuten raus an die Luft oder jemanden anrufen",
+        "Abends vor dem Fernseher": "Tee kochen, Gemüsesticks oder Gurke statt Chips",
+        "Nach dem Essen": "Zähne putzen – danach schmeckt Süßes nicht",
+        "Müdigkeit": "Kurz hinlegen oder früher ins Bett, statt Zucker als Wachmacher",
+        "Frust": "Einmal um den Block gehen und dann neu entscheiden",
+        "Süßes gesehen": "Aus dem Blick räumen und 10 Minuten warten",
+    },
+    "unlocked": {},
+    "challenges_done": [],
+    "challenge_skips": {},
 }
 
 
