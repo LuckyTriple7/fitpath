@@ -17,6 +17,7 @@ Doku: [README.md](README.md)
 - Wochenrückblick als Obsidian-Notiz.
 
 ### Ideen
+- Auswärts essen: Bereich „Auswärts“ mit fertigen Tellern in typischen Restaurant-Größen (Gyros-Teller mit Tsatsiki und Pommes, Schnitzel mit Pommes, Döner, Currywurst, Pizza …), zusammengesetzt aus BLS-Bausteinen, mit Größe klein/normal/groß und Hinweis, dass Restaurant-Portionen oft fetter sind. Offene Datenbanken mit Restaurant-Gerichten gibt es kaum (WW-Punkte proprietär, fddb ohne freie Lizenz, Open Food Facts fast nur Verpacktes).
 - Wasser trinken zählen.
 - Receive/Writeback von Life Dashboard: Gewicht aus FitPath nach Health Connect zurückschreiben.
 
