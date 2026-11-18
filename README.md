@@ -29,13 +29,27 @@ Soll der Container ein bestehendes Docker-Netz erreichen (z. B. das des KI-Proxy
 
 ## Update
 
-Bei jedem Push auf `main` baut GitHub Actions nach den Tests ein neues Image (`linux/amd64` und `linux/arm64`) und legt es als `ghcr.io/luckytriple7/fitpath:latest` ab, dazu ein Tag je Commit (`sha-…`) und je Version (`v1.2.3` → `1.2.3`). Neue Datenbank-Spalten ergänzt die App beim Start selbst.
+Versionen nach SemVer, Änderungen im [CHANGELOG.md](CHANGELOG.md). Die Version steht in `app/__init__.py`, in der App unter **Mehr** und in `/healthz`.
+
+| Ereignis | Image-Tags | Gedacht für |
+|---|---|---|
+| Release-Tag `vX.Y.Z` | `X.Y.Z`, `X.Y`, `latest` (+ GitHub-Release mit dem Changelog-Abschnitt) | Betrieb |
+| Push auf `main` | `main`, `sha-…` | Zwischenstand zum Ausprobieren |
+
+`compose.yml` nutzt `latest`, holt also nur Releases:
 
 ```bash
 cd /opt/docker/stacks/fitpath && docker compose pull && docker compose up -d
 ```
 
-In Dockge reicht **Update**. Zurück auf einen älteren Stand: in `compose.yml` statt `latest` ein `sha-…`-Tag eintragen.
+In Dockge reicht **Update**. Eine Version festhalten oder zurückgehen: in `compose.yml` statt `latest` z. B. `1.2.3` eintragen. Neue Datenbank-Spalten ergänzt die App beim Start selbst.
+
+Release machen (Einträge stehen unter „Unveröffentlicht“ im Changelog):
+
+```bash
+python tools/release.py 1.2.3     # Version setzen, Changelog datieren, Commit und Tag
+git push --follow-tags            # GitHub testet, prüft Tag = Version, baut das Image, legt das Release an
+```
 
 ## Funktionen
 
@@ -147,7 +161,8 @@ Uhrzeiten und Zahlen gibt die App unabhängig von der Browsersprache ein: Uhrzei
 | `seed/bls40.csv.gz` | BLS 4.0 in kompakter Form |
 | `tools/bls_convert.py` | BLS-Excel → Seed (nur lokal, braucht `openpyxl`) |
 | `tests/` | `pytest`: Formel, Budget, Reserve, Trend, Webhook, Gerichte, KI-Erfassung, API-Durchstich (läuft auch in GitHub Actions vor dem Image-Bau) |
-| `.github/workflows/image.yml` | Tests, dann Image für amd64/arm64 nach ghcr.io |
+| `.github/workflows/image.yml` | Tests, Image für amd64/arm64 nach ghcr.io, Release bei Tag |
+| `CHANGELOG.md`, `tools/release.py` | Änderungen je Version, Release vorbereiten |
 
 Tests lokal: `python -m venv venv && venv/bin/pip install -r requirements.txt pytest && venv/bin/python -m pytest -q tests`
 

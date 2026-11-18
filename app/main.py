@@ -12,7 +12,7 @@ from datetime import timedelta
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 
-from . import ai, auth, backup, body, db, diary, foods, ingest, points, push
+from . import __version__, ai, auth, backup, body, db, diary, foods, ingest, points, push
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 MAX_INGEST_BYTES = 12 * 1024 * 1024
@@ -94,7 +94,7 @@ def icons(name: str):
 
 @app.get("/healthz")
 def healthz():
-    return {"ok": True}
+    return {"ok": True, "version": __version__}
 
 
 CONFIRM_PAGE = """<!doctype html>
@@ -210,6 +210,7 @@ def _state(conn, day: str | None = None) -> dict:
         "vapid_key": push.public_key(),
         "activity_levels": points.ACTIVITY_LEVELS,
         "ai": ai.available(),
+        "version": __version__,
         "server_time": db.iso(db.now_utc()),
     }
 

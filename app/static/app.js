@@ -1009,7 +1009,7 @@ async function viewMore() {
       <button class="btn small" id="p-save">Speichern</button></div>
     <div class="card"><div class="card-head"><h2>📱 Geräte</h2><button class="btn small" id="dev-link">Neues verbinden</button></div><div id="devs"></div></div>
     <div class="card"><h2>💾 Daten</h2><a class="btn small" href="/api/export">Export als JSON</a></div>
-    <div class="card"><h2>ℹ️ Quellen</h2>
+    <div class="card"><div class="card-head"><h2>ℹ️ Quellen</h2><span class="pill">FitPath ${esc(S.version || "")}</span></div>
       <p class="note">Nährwerte: <b>Bundeslebensmittelschlüssel (BLS) 4.0</b>, Max Rubner-Institut (2025), Karlsruhe, DOI 10.25826/Data20251217-134202-0, Lizenz CC BY 4.0. Markenprodukte per Barcode: <b>Open Food Facts</b> (ODbL).</p>
       <p class="note">FitPath ersetzt keine ärztliche Beratung. Bei Vorerkrankungen, Schwangerschaft oder Essstörungen das Vorgehen mit Arzt oder Ärztin abstimmen.</p></div>`;
 

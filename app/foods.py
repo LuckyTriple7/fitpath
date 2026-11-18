@@ -18,13 +18,12 @@ import time
 
 import httpx
 
-from . import db, points
+from . import __version__, db, points
 
 SEED = os.environ.get("BLS_SEED", os.path.join(os.path.dirname(os.path.dirname(__file__)), "seed", "bls40.csv.gz"))
 OFF_URL = "https://world.openfoodfacts.org/api/v2/product/{code}.json"
 OFF_FIELDS = "code,product_name,product_name_de,generic_name_de,brands,nutriments,serving_quantity,quantity"
 OFF_CONTACT = os.environ.get("OFF_CONTACT", "").strip()
-APP_VERSION = "0.1.0"
 
 FOOD_COLS = ("id, source, code, name, brand, kcal, protein, fat, satfat, carbs, sugar, fiber, alcohol, salt, "
              "zero_auto, zero_user, portions, serving_g, fav, hidden, pts_100")
@@ -503,7 +502,7 @@ def barcode(conn, code: str) -> dict:
             return {"status": "found", "food": as_dict(row)}
     if not _off_allowed():
         return {"status": "busy"}
-    ua = f"FitPath/{APP_VERSION}" + (f" ({OFF_CONTACT})" if OFF_CONTACT else "")
+    ua = f"FitPath/{__version__}" + (f" ({OFF_CONTACT})" if OFF_CONTACT else "")
     try:
         r = httpx.get(OFF_URL.format(code=code), params={"fields": OFF_FIELDS},
                       headers={"User-Agent": ua}, timeout=8)

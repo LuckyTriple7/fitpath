@@ -32,6 +32,9 @@ def client():
 def test_flow():
     c = client()
     assert c.get("/api/state").status_code == 200
+    from app import __version__
+    assert c.get("/healthz").json() == {"ok": True, "version": __version__}
+    assert c.get("/api/state").json()["version"] == __version__
     assert c.post("/api/onboarding", json={}).status_code == 403          # ohne App-Header
     r = c.post("/api/budget/preview", headers=H, json={"start_weight": 95, "height_cm": 178, "birth_year": 1975})
     assert r.json()["points"] > 30
