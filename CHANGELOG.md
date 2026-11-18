@@ -6,6 +6,8 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+## [0.10.0] – 2026-11-18
+
 ### Hinzugefügt
 - Nährwerte vom Foto: Kennt der Barcode-Scan ein Produkt nicht, liest die KI die Nährwerttabelle vom Foto ab und füllt das Formular „Eigenes Lebensmittel“ vor (je 100 g, mit Name, Marke und Portion, wenn lesbar). Plausibilitätsprüfung mit Hinweis „bitte prüfen“. Nur mit eingerichteter KI und einem Modell, das Bilder versteht.
 
