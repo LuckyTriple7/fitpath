@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FitPath</title>
+  <meta name="description" content="Persönlicher Begleiter zum Abnehmen">
+  <meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f6f5f2" media="(prefers-color-scheme: light)">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><img src="/icons/icon-192.png" alt="" width="28" height="28"><span>FitPath</span></div>
+    <div id="netstate" class="netstate" hidden>offline</div>
+  </header>
+
+  <main id="view" class="view" aria-live="polite">
+    <div class="loading">Lade …</div>
+  </main>
+
+  <nav class="tabbar" id="tabbar" hidden>
+    <a href="#heute" data-tab="heute"><span class="ti">🏠</span><span>Heute</span></a>
+    <a href="#statistik" data-tab="statistik"><span class="ti">📊</span><span>Statistik</span></a>
+    <a href="#erfassen" data-tab="erfassen" class="add-tab" aria-label="Erfassen"><span class="add-btn">+</span></a>
+    <a href="#gewicht" data-tab="gewicht"><span class="ti">⚖️</span><span>Gewicht</span></a>
+    <a href="#mehr" data-tab="mehr"><span class="ti">⚙️</span><span>Mehr</span></a>
+  </nav>
+
+  <div id="sheet" class="sheet" hidden>
+    <div class="sheet-backdrop" data-close></div>
+    <div class="sheet-panel" role="dialog" aria-modal="true">
+      <div class="sheet-grip"></div>
+      <div id="sheet-body"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

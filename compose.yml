@@ -1,0 +1,45 @@
+services:
+
+  fitpath:
+    # Fertiges Image aus GitHub Actions (privat: vorher einmal docker login ghcr.io)
+    image: ghcr.io/luckytriple7/fitpath:latest
+    container_name: fitpath
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=5).status == 200 else 1)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+    environment:
+      TZ: ${TZ:-Europe/Berlin}
+      DATA_DIR: /data
+      # Öffentliche HTTPS-Adresse (Reverse Proxy); daraus entstehen Anmeldelinks und die Webhook-Adresse
+      PUBLIC_URL: ${FITPATH_PUBLIC_URL:?FITPATH_PUBLIC_URL fehlt in .env}
+      # Kontakt im User-Agent für Open Food Facts (deren Wunsch an Apps), optional
+      OFF_CONTACT: ${FITPATH_OFF_CONTACT:-}
+      # KI (Erfassen per Text) über einen OpenAI-kompatiblen Proxy (z. B. LiteLLM); ohne Key ausgeblendet
+      LITELLM_URL: ${FITPATH_LITELLM_URL:-http://litellm:4000}
+      LITELLM_API_KEY: ${FITPATH_LITELLM_KEY:-}
+      FITPATH_MODEL_FAST: ${FITPATH_MODEL_FAST:-claude-haiku-5-5}
+
+    # Daten im Stack-Ordner (Datenbank, VAPID-Schlüssel, tägliche Sicherung data/backup/)
+    volumes:
+      - ./data:/data
+
+    # Nur localhost; öffentlich über den Reverse Proxy
+    ports:
+      - "127.0.0.1:${FITPATH_PORT:-8800}:8080"
+
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 192m
+
+# Eigenes Netz zum KI-Proxy o. Ä.: compose.override.yml anlegen (Vorlage compose.override.example.yml).

@@ -1,0 +1,13 @@
+# Vorlage für compose.override.yml (wird von docker compose und Dockge automatisch mitgeladen,
+# steht nicht im Repo). Beispiel: Container ins Netz des KI-Proxys hängen, damit
+# LITELLM_URL=http://litellm:4000 auflöst.
+services:
+  fitpath:
+    networks:
+      - default
+      - litellm_net
+
+networks:
+  litellm_net:
+    external: true
+    name: <name-des-litellm-netzes>   # docker network ls

@@ -1,0 +1,151 @@
+"""Web-Push: VAPID-Schlüssel und Erinnerungen.
+
+Erinnerungen (alle abschaltbar, Ruhezeiten und Höchstzahl pro Tag gelten):
+- Wiegen: an den gewählten Wochentagen zur gewählten Uhrzeit, wenn noch kein Gewicht da ist.
+- Mittag: zur gewählten Uhrzeit, wenn heute noch nichts erfasst ist.
+- Abend: zur gewählten Uhrzeit, wenn heute weniger als zwei Mahlzeiten erfasst sind.
+"""
+
+import asyncio
+import base64
+import json
+import os
+import random
+from datetime import datetime
+
+from . import db
+
+VAPID_FILE = os.path.join(db.DATA_DIR, "vapid_private.pem")
+VAPID_SUB = os.environ.get("VAPID_SUB") or os.environ.get("PUBLIC_URL") or "https://localhost"
+TICK_SECONDS = 300
+
+_public_key = None
+
+
+def ensure_vapid() -> str:
+    """Erzeugt beim ersten Start ein Schlüsselpaar und liefert den öffentlichen Schlüssel."""
+    global _public_key
+    from cryptography.hazmat.primitives import serialization
+    from py_vapid import Vapid
+
+    if os.path.exists(VAPID_FILE):
+        vapid = Vapid.from_file(VAPID_FILE)
+    else:
+        vapid = Vapid()
+        vapid.generate_keys()
+        vapid.save_key(VAPID_FILE)
+        os.chmod(VAPID_FILE, 0o600)
+    raw = vapid.public_key.public_bytes(
+        serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
+    _public_key = base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+    return _public_key
+
+
+def public_key() -> str:
+    return _public_key or ensure_vapid()
+
+
+def send(conn, title: str, body: str, url: str = "/", tag: str = "fitpath") -> int:
+    from pywebpush import WebPushException, webpush
+
+    payload = json.dumps({"title": title, "body": body, "url": url, "tag": tag}, ensure_ascii=False)
+    sent = 0
+    for sub in conn.execute("SELECT * FROM push_subs").fetchall():
+        info = {"endpoint": sub["endpoint"], "keys": {"p256dh": sub["p256dh"], "auth": sub["auth"]}}
+        try:
+            webpush(info, payload, vapid_private_key=VAPID_FILE,
+                    vapid_claims={"sub": VAPID_SUB}, ttl=3600, timeout=15)
+            sent += 1
+        except WebPushException as exc:
+            status = getattr(exc.response, "status_code", None)
+            if status in (404, 410):
+                conn.execute("DELETE FROM push_subs WHERE endpoint = ?", (sub["endpoint"],))
+            print(f"Push-Fehler {status}: {exc}", flush=True)
+        except Exception as exc:
+            print(f"Push-Fehler: {exc}", flush=True)
+    return sent
+
+
+def _hm(value: str, default: str) -> tuple:
+    try:
+        h, m = (value or default).split(":")
+        return int(h), int(m)
+    except ValueError:
+        h, m = default.split(":")
+        return int(h), int(m)
+
+
+def in_quiet(settings: dict, loc: datetime) -> bool:
+    qs = _hm(settings.get("quiet_start"), "22:00")
+    qe = _hm(settings.get("quiet_end"), "07:00")
+    cur = (loc.hour, loc.minute)
+    if qs <= qe:
+        return qs <= cur < qe
+    return cur >= qs or cur < qe
+
+
+def _log(conn, kind: str, slot: str) -> bool:
+    """True, wenn der Slot neu ist (noch nicht gesendet)."""
+    try:
+        conn.execute("INSERT INTO push_log (ts, kind, slot) VALUES (?, ?, ?)",
+                     (db.iso(db.now_utc()), kind, slot))
+        return True
+    except Exception:
+        return False
+
+
+def _sent_today(conn, loc: datetime) -> int:
+    start = loc.replace(hour=0, minute=0, second=0, microsecond=0)
+    return conn.execute("SELECT COUNT(*) FROM push_log WHERE ts >= ?", (db.iso(start),)).fetchone()[0]
+
+
+WEIGH_TEXTS = ["Guten Morgen! Kurz auf die Waage – nüchtern ist der Wert am ehrlichsten.",
+               "Wiege-Tag. Der Trend zählt, nicht der einzelne Wert."]
+LUNCH_TEXTS = ["Heute noch nichts erfasst. Ein Tipp auf „Zuletzt“ reicht oft schon.",
+               "Was gab's bisher? Frühstück und Mittag nachtragen dauert 30 Sekunden."]
+EVENING_TEXTS = ["Tag fast geschafft. Fehlt noch eine Mahlzeit im Tagebuch?",
+                 "Kurzer Abend-Check: Ist alles erfasst? Dann siehst du morgen die Reserve."]
+
+
+def tick() -> None:
+    with db.connect() as conn:
+        s = db.get_settings(conn)
+        if not s.get("onboarded") or not s.get("push_enabled"):
+            return
+        if not conn.execute("SELECT 1 FROM push_subs LIMIT 1").fetchone():
+            return
+        loc = db.local(db.now_utc())
+        today = loc.date().isoformat()
+        if in_quiet(s, loc) or _sent_today(conn, loc) >= int(s.get("push_max_per_day") or 3):
+            return
+        cur = (loc.hour, loc.minute)
+
+        # 1. Wiegen
+        if loc.weekday() in (s.get("weigh_days") or []) and cur >= _hm(s.get("weigh_time"), "07:30") and cur < (12, 0):
+            weighed = conn.execute("SELECT 1 FROM body WHERE kind = 'weight' AND day = ?", (today,)).fetchone()
+            if not weighed and _log(conn, "weigh", f"weigh:{today}"):
+                send(conn, "Wiegen", random.choice(WEIGH_TEXTS), "/#gewicht", "weigh")
+                return
+
+        entries = conn.execute("SELECT COUNT(*), COUNT(DISTINCT meal) FROM food_log WHERE day = ?", (today,)).fetchone()
+
+        # 2. Mittag: noch nichts erfasst
+        if s.get("lunch_reminder") and cur >= _hm(s["lunch_reminder"], "14:00") and cur < (17, 0):
+            if not entries[0] and _log(conn, "lunch", f"lunch:{today}"):
+                send(conn, "Noch nichts erfasst", random.choice(LUNCH_TEXTS), "/#heute", "lunch")
+                return
+
+        # 3. Abend: weniger als zwei Mahlzeiten
+        if s.get("evening_time") and cur >= _hm(s["evening_time"], "20:30"):
+            if entries[1] < 2 and _log(conn, "evening", f"evening:{today}"):
+                send(conn, "Tag abschließen", random.choice(EVENING_TEXTS), "/#heute", "evening")
+
+
+async def loop() -> None:
+    await asyncio.sleep(20)
+    while True:
+        try:
+            await asyncio.to_thread(tick)
+        except Exception as exc:
+            print(f"Push-Planer: {exc}", flush=True)
+        await asyncio.sleep(TICK_SECONDS)

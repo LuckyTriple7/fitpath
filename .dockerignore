@@ -1,0 +1,10 @@
+**/__pycache__
+.env
+*.md
+data
+tests
+tools
+.git
+.github
+compose*.yml
+*.bak*
