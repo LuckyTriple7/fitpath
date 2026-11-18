@@ -106,3 +106,49 @@ def test_flow():
     assert c.put(f"/api/devices/{dev['id']}", headers=H, json={"name": ""}).status_code == 400
     assert c.put("/api/devices/9999", headers=H, json={"name": "X"}).status_code == 404
     c.__exit__(None, None, None)
+
+
+def test_pairing_with_code():
+    old = client()                                  # schon verbundenes Gerät
+    new = TestClient(main.app)                      # neues Gerät ohne Cookie
+    assert new.get("/api/state").status_code == 401
+    assert new.post("/api/pair/start", json={}).status_code == 403          # ohne App-Header
+    ua = {**H, "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0 Safari/537.36"}
+    r = new.post("/api/pair/start", headers=ua, json={}).json()
+    code, rid = r["code"], r["rid"]
+    assert len(code) == 6 and r["link"].endswith(f"/#pair={code}") and "<svg" in r["qr_svg"]
+    assert new.post("/api/pair/poll", headers=H, json={"rid": rid}).json() == {"status": "pending"}
+    assert new.get(f"/api/pair/{code}").status_code == 401                 # freigeben nur angemeldet
+    info = old.get(f"/api/pair/{code}").json()
+    assert info["label"] == "Windows · Chrome" and info["name"] == "Windows"
+    assert old.get("/api/pair/000000x").status_code == 404
+    assert old.post(f"/api/pair/{code}", json={"approve": True}).status_code == 403   # ohne App-Header
+    assert old.post(f"/api/pair/{code}", headers=H, json={"approve": True, "name": "Büro-PC"}).json() == {"ok": True}
+    assert old.get(f"/api/pair/{code}").status_code == 404                 # nur einmal freigeben
+    assert new.post("/api/pair/poll", headers=H, json={"rid": "falsch"}).json() == {"status": "expired"}
+    r = new.post("/api/pair/poll", headers=H, json={"rid": rid})
+    assert r.json() == {"status": "approved"} and auth.COOKIE in r.cookies
+    assert new.get("/api/state").status_code == 200
+    assert "Büro-PC" in [d["name"] for d in old.get("/api/devices").json()]
+    assert new.post("/api/pair/poll", headers=H, json={"rid": rid}).json() == {"status": "expired"}   # verbraucht
+    # ablehnen
+    other = TestClient(main.app)
+    r = other.post("/api/pair/start", headers=H, json={}).json()
+    old.post(f"/api/pair/{r['code']}", headers=H, json={"approve": False})
+    assert other.post("/api/pair/poll", headers=H, json={"rid": r["rid"]}).json() == {"status": "denied"}
+    assert other.get("/api/state").status_code == 401
+    old.__exit__(None, None, None)
+
+
+def test_pairing_limits():
+    c = TestClient(main.app)
+    c.__enter__()
+    auth._pair_calls.clear()
+    codes = [c.post("/api/pair/start", headers=H, json={}).status_code for _ in range(auth.PAIR_PER_MINUTE + 1)]
+    assert codes[-1] == 429 and set(codes[:-1]) == {200}
+    auth._pair_calls.clear()
+    with db.connect() as conn:                       # abgelaufene Anfragen werden aufgeräumt
+        conn.execute("UPDATE pair_requests SET expires = '2000-01-01T00:00:00+00:00'")
+        auth._pair_cleanup(conn)
+        assert conn.execute("SELECT COUNT(*) FROM pair_requests").fetchone()[0] == 0
+    c.__exit__(None, None, None)

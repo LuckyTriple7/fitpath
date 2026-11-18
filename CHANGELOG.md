@@ -6,6 +6,12 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+### Hinzugefügt
+- Neues Gerät per QR-Code oder Code verbinden (wie WhatsApp Web): Das neue Gerät zeigt beim Öffnen einen QR-Code und eine 6-stellige Zahl. Auf einem verbundenen Gerät scannen oder unter **Mehr → Geräte → Code eingeben** eintippen, dann **Zulassen** – fertig, ohne Link abzutippen. Der Anmeldelink bleibt als Rückfall.
+
+### Behoben
+- Die Tab-Leiste war auf der Anmelde- und Einrichtungsseite sichtbar, obwohl sie ausgeblendet sein sollte.
+
 ## [0.8.0] – 2026-11-18
 
 ### Hinzugefügt

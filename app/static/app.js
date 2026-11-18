@@ -231,6 +231,11 @@ async function render() {
   if (!S) {
     try { await loadState(); } catch (e) { return e instanceof AuthError ? viewLogin() : viewError(e); }
   }
+  if (route.startsWith("pair=")) {                // QR-Code eines neuen Geräts gescannt
+    history.replaceState(null, "", "#heute");
+    if (S.settings.onboarded) viewToday();
+    return openPairApprove(route.slice(5));
+  }
   if (!S.settings.onboarded) { $("#tabbar").hidden = true; return viewOnboarding(); }
   $("#tabbar").hidden = false;
   $("#sos-top").hidden = false;
@@ -251,17 +256,87 @@ async function render() {
 $("#sos-top").onclick = () => openSOS();
 window.addEventListener("hashchange", () => { render(); window.scrollTo(0, 0); });
 
+let pairRun = 0;   // laufende Kopplung auf der Anmeldeseite (neue Nummer = alte stoppt)
+
 function viewLogin() {
   $("#tabbar").hidden = true;
+  $("#sos-top").hidden = true;
   const bad = location.search.includes("login=ungueltig");
+  const my = ++pairRun;
   view.innerHTML = `
     <div class="card hero mt">
-      <div class="big-emoji">🔒</div>
-      <h1>Nicht verbunden</h1>
+      <h1>Gerät verbinden</h1>
       ${bad ? `<p style="color:var(--bad)">Der Link war abgelaufen oder schon benutzt.</p>` : ""}
-      <p class="muted">Öffne einen Anmeldelink. Den erzeugst du auf dem Server oder in FitPath auf einem schon verbundenen Gerät unter <b>Mehr → Geräte</b>.</p>
-      <p class="linkbox">docker compose exec fitpath python -m app.cli link Handy</p>
+      <div id="pair"><p class="muted">Lade Code …</p></div>
+      <details class="more mt"><summary>Erstes Gerät oder kein Gerät zur Hand?</summary>
+        <p class="note">Anmeldelink auf dem Server erzeugen und öffnen:</p>
+        <p class="linkbox">docker compose exec fitpath python -m app.cli link Handy</p></details>
     </div>`;
+  let rid = null, until = 0, tick = null;
+  const alive = () => my === pairRun && $("#pair");
+  const start = async () => {
+    if (!alive()) return;
+    let r;
+    try { r = await api("/api/pair/start", { method: "POST", body: {} }); }
+    catch (e) { if (alive()) $("#pair").innerHTML = `<p style="color:var(--bad)">${esc(e.message)}</p><button class="btn" id="pair-retry">Nochmal</button>`;
+      $("#pair-retry") && ($("#pair-retry").onclick = start); return; }
+    if (!alive()) return;
+    rid = r.rid; until = Date.now() + r.seconds * 1000;
+    $("#pair").innerHTML = `<p class="muted">Auf einem schon verbundenen Gerät den QR-Code mit der Kamera scannen<br>oder unter <b>Mehr → Geräte → Code eingeben</b> diese Zahl eintippen:</p>
+      <div class="pair-qr">${r.qr_svg}</div>
+      <div class="pair-code">${r.code.slice(0, 3)} ${r.code.slice(3)}</div>
+      <p class="note" id="pair-left"></p>`;
+  };
+  const poll = async () => {
+    if (!alive()) return clearInterval(tick);
+    const left = Math.max(0, Math.round((until - Date.now()) / 1000));
+    $("#pair-left") && ($("#pair-left").textContent = `Wartet auf Freigabe … neuer Code in ${Math.floor(left / 60)}:${pad(left % 60)}`);
+    if (!rid) return;
+    if (!left) { rid = null; return start(); }
+    let r;
+    try { r = await api("/api/pair/poll", { method: "POST", body: { rid } }); } catch (_) { return; }
+    if (!alive()) return;
+    if (r.status === "approved") {
+      clearInterval(tick); pairRun++;
+      history.replaceState(null, "", "/#heute");
+      S = null; toast("Verbunden ✅"); render();
+    } else if (r.status === "denied") { rid = null; toast("Abgelehnt"); start(); }
+    else if (r.status === "expired") { rid = null; start(); }
+  };
+  start();
+  tick = setInterval(poll, 2000);
+}
+
+async function openPairApprove(code) {
+  code = String(code || "").replace(/\D/g, "");
+  let info;
+  try { info = await api(`/api/pair/${code}`); } catch (e) { return toast(e.message); }
+  openSheet(`<h2>🔗 Gerät verbinden?</h2>
+    <p><b>${esc(info.label)}</b> möchte sich verbinden (Code ${code.slice(0, 3)} ${code.slice(3)}, angefragt vor ${info.age_s < 60 ? `${info.age_s} s` : `${Math.round(info.age_s / 60)} min`}).</p>
+    <p class="note">Nur zulassen, wenn du das gerade selbst bist und der Code auf dem neuen Gerät genauso aussieht.</p>
+    <label class="f"><span>Name des Geräts</span><input type="text" id="pair-name" value="${esc(info.name)}" maxlength="40"></label>
+    <div class="row nowrap mt"><button class="btn danger grow" id="pair-no">Ablehnen</button><button class="btn primary grow" id="pair-yes">Zulassen</button></div>`, root => {
+    const decide = async approve => {
+      try { await api(`/api/pair/${code}`, { method: "POST", body: { approve, name: $("#pair-name", root).value.trim() } }); }
+      catch (e) { return toast(e.message); }
+      closeSheet(); toast(approve ? "Freigegeben – das neue Gerät verbindet sich gleich" : "Abgelehnt");
+      if ($("#devs")) setTimeout(loadDevices, 3000);
+    };
+    $("#pair-yes", root).onclick = () => decide(true);
+    $("#pair-no", root).onclick = () => decide(false);
+  });
+}
+
+function openPairCode() {
+  openSheet(`<h2>🔗 Code eingeben</h2>
+    <p class="muted">Das neue Gerät zeigt beim Öffnen von FitPath einen QR-Code und eine 6-stellige Zahl.</p>
+    <input type="text" inputmode="numeric" id="pc" class="big" maxlength="7" placeholder="123 456" autocomplete="off">
+    <button class="btn primary block mt" id="pc-go">Weiter</button>`, root => {
+    const go = () => { const c = $("#pc", root).value.replace(/\D/g, ""); if (c.length === 6) openPairApprove(c); else toast("6 Ziffern eingeben"); };
+    $("#pc-go", root).onclick = go;
+    $("#pc", root).onkeydown = e => { if (e.key === "Enter") go(); };
+    setTimeout(() => $("#pc", root).focus(), 250);
+  });
 }
 function viewError(e) {
   view.innerHTML = `<div class="card mt center"><div class="big-emoji">⚠️</div><p>Server nicht erreichbar.</p><p class="muted">${esc(e.message)}</p>
@@ -1380,7 +1455,8 @@ async function viewMore() {
       <div id="plans">${plansHtml(s)}</div>
       <div class="row nowrap mt"><input type="text" id="new-trigger" class="grow" maxlength="40" placeholder="Neuer Auslöser, z. B. Feierabend"><button class="btn small" id="add-trigger">+</button></div>
       <button class="btn small mt" id="plans-save">Speichern</button></div>
-    <div class="card"><div class="card-head"><h2>📱 Geräte</h2><button class="btn small" id="dev-link">Neues verbinden</button></div><div id="devs"></div></div>
+    <div class="card"><div class="card-head"><h2>📱 Geräte</h2><button class="btn small primary" id="dev-code">Code eingeben</button></div><div id="devs"></div>
+      <p class="note">Neues Gerät: dort FitPath öffnen, QR-Code mit der Kamera scannen oder die Zahl über <b>Code eingeben</b> eintippen. Ohne zweites Gerät geht auch ein <button class="linkbtn" id="dev-link">Anmeldelink</button>.</p></div>
     <div class="card"><h2>💾 Daten</h2><a class="btn small" href="/api/export">Export als JSON</a></div>
     <div class="card"><div class="card-head"><h2>ℹ️ Quellen</h2><span class="pill">FitPath ${esc(S.version || "")}</span></div>
       <p class="note">Nährwerte: <b>Bundeslebensmittelschlüssel (BLS) 4.0</b>, Max Rubner-Institut (2025), Karlsruhe, DOI 10.25826/Data20251217-134202-0, Lizenz CC BY 4.0. Markenprodukte per Barcode: <b>Open Food Facts</b> (ODbL).</p>
@@ -1411,6 +1487,7 @@ async function viewMore() {
   };
   $("#push-on").onclick = enablePush;
   $("#push-test").onclick = async () => { const r = await api("/api/push/test", { method: "POST" }); toast(r.sent ? `An ${r.sent} Gerät(e) gesendet` : "Kein Gerät angemeldet"); };
+  $("#dev-code").onclick = openPairCode;
   $("#dev-link").onclick = async () => {
     const name = prompt("Name des Geräts (z. B. Tablet):", "") ?? null; if (name === null) return;
     const r = await api("/api/devices/link", { method: "POST", body: { name } });

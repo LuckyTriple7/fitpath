@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from datetime import timedelta
 
 import httpx
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 
 from . import __version__, ai, auth, backup, body, db, diary, foods, ingest, motivation, points, push, recipe_import, swaps
@@ -133,8 +133,7 @@ def auth_confirm(token: str, request: Request):
     if not session:
         return RedirectResponse("/?login=ungueltig", status_code=303)
     resp = RedirectResponse("/", status_code=303)
-    resp.set_cookie(auth.COOKIE, session, max_age=auth.COOKIE_DAYS * 86400, httponly=True,
-                    secure=auth.COOKIE_SECURE, samesite="lax", path="/")
+    _set_session(resp, session)
     return resp
 
 
@@ -719,6 +718,55 @@ def devices(device=Depends(auth.require)):
     for r in rows:
         r["current"] = r["id"] == device["id"]
     return rows
+
+
+def _set_session(resp: Response, session: str) -> None:
+    resp.set_cookie(auth.COOKIE, session, max_age=auth.COOKIE_DAYS * 86400, httponly=True,
+                    secure=auth.COOKIE_SECURE, samesite="lax", path="/")
+
+
+@app.post("/api/pair/start")
+def pair_start(request: Request):
+    """Ohne Anmeldung: neues Gerät fordert eine Kopplung an (Code und QR-Code)."""
+    if request.headers.get("x-fitpath") != "1":
+        raise HTTPException(403, "Header fehlt")
+    with db.connect() as conn:
+        r = auth.pair_start(conn, request.headers.get("user-agent", ""))
+    if not r:
+        raise HTTPException(429, "Gerade zu viele Anfragen – in einer Minute nochmal")
+    import segno
+    link = f"{auth.PUBLIC_URL}/#pair={r['code']}"
+    return {**r, "link": link, "qr_svg": segno.make(link, error="m").svg_inline(scale=7, border=3, dark="#000", light="#fff")}
+
+
+@app.post("/api/pair/poll")
+async def pair_poll(request: Request, response: Response):
+    if request.headers.get("x-fitpath") != "1":
+        raise HTTPException(403, "Header fehlt")
+    data = await request.json()
+    with db.connect() as conn:
+        status, session = auth.pair_poll(conn, str(data.get("rid") or ""))
+    if session:
+        _set_session(response, session)
+    return {"status": status}
+
+
+@app.get("/api/pair/{code}")
+def pair_info(code: str, device=Depends(auth.require)):
+    with db.connect() as conn:
+        info = auth.pair_info(conn, code)
+    if not info:
+        raise HTTPException(404, "Code unbekannt oder abgelaufen")
+    return info
+
+
+@app.post("/api/pair/{code}")
+async def pair_decide(code: str, request: Request, device=Depends(auth.require)):
+    data = await request.json()
+    with db.connect() as conn:
+        if not auth.pair_decide(conn, code, bool(data.get("approve")), _clean_text(data.get("name"), 40)):
+            raise HTTPException(404, "Code unbekannt oder abgelaufen")
+    return {"ok": True}
 
 
 @app.post("/api/devices/link")

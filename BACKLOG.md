@@ -30,4 +30,5 @@ Commit-Angaben bis 18.11.2026 beziehen sich auf das frühere Sammel-Repo, aus de
 - **18.11.2026** „Wie gestern“ je Mahlzeit, Gerichte aus Zutaten (0-Punkte-Zutaten bleiben frei, Gewicht nach dem Kochen optional), Erfassen per Text über LiteLLM (KI zerlegt, Suche schlägt vor, Nutzer bestätigt); Synonyme für Hackfleisch, Zwiebel, Kidneybohnen
 - **18.11.2026** Schritt 3 Motivation: Level/XP, Abzeichen, Wochen-Challenge, Konfetti, Heißhunger-SOS mit Wenn-Dann-Plänen, Snack-Push; BMI im Tab Gewicht; Version neben dem Logo
 - **18.11.2026** Rezept-Import per Link (Cookidoo u. a.) mit Zutaten-Zuordnung und kcal-Vergleich
-- **18.11.2026** Lieber-Tausch im Heißhunger-SOS: Alternativen je Gelüst mit Punkten, „Bewusst genießen“ mit Budget-Hinweis, Auswertung in der Statistik
+- **18.11.2026** Lieber-Tausch im Heißhunger-SOS: Alternativen je Gelüst mit Punkten, „Bewusst genießen“ mit Budget-Hinweis, Auswertung in der Statistik (0.8.0)
+- **18.11.2026** Neues Gerät per QR-Code oder 6-stelligem Code verbinden, Freigabe auf einem verbundenen Gerät

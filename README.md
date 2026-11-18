@@ -34,7 +34,7 @@ Soll der Container ein bestehendes Docker-Netz erreichen (z. B. das des KI-Proxy
    Ein benanntes Volume übernimmt den richtigen Eigentümer aus dem Image. Ein Ordner `./data`, den Docker selbst anlegt, gehört dagegen root, und die App kann nicht hineinschreiben (sie meldet das beim Start im Log).
 3. Im Feld **.env** mindestens `FITPATH_PUBLIC_URL=https://…` eintragen, für die KI optional `FITPATH_AI_URL`, `FITPATH_AI_KEY`, `FITPATH_AI_MODEL` (Beispiele in [`.env.example`](.env.example)).
 4. **Deploy**. Im Log erscheint beim ersten Start „BLS importiert: 7140 Lebensmittel“, der Container wird nach etwa 20 Sekunden „healthy“.
-5. Anmeldelink: beim Container `fitpath` das Terminal öffnen (Symbol `>_`, Shell `sh`) und `python -m app.cli link Handy` eingeben. Den Link auf dem Handy öffnen und **Verbinden** tippen.
+5. Anmeldelink fürs erste Gerät: beim Container `fitpath` das Terminal öffnen (Symbol `>_`, Shell `sh`) und `python -m app.cli link Handy` eingeben. Den Link auf dem Handy öffnen und **Verbinden** tippen. Weitere Geräte koppelst du danach per QR-Code oder Code (siehe [Anmeldung](#anmeldung)).
 6. Reverse Proxy auf `http://127.0.0.1:8800` einrichten (siehe oben).
 
 Updates holt der Knopf **Update** im Stack. Sicherung beim benannten Volume: die Daten liegen unter `/var/lib/docker/volumes/fitpath_fitpath_data/_data`, die App legt dort täglich eine Kopie nach `backup/`; zusätzlich Export als JSON unter **Mehr → Daten**.
@@ -156,7 +156,11 @@ Bei LiteLLM einen eigenen virtuellen Key mit kleinem Budget anlegen, der nur das
 
 ## Anmeldung
 
-Kein Passwort. Der Server erzeugt einen Einmal-Link, 15 Minuten gültig, nur einmal nutzbar. Der Link öffnet zuerst eine Bestätigungsseite; eingelöst wird er erst mit **Verbinden** (POST). Grund: Messenger und Browser rufen Links für die Vorschau per GET ab und hätten ihn sonst verbraucht, bevor das Handy ihn öffnet. Danach bleibt das Gerät 400 Tage per Session-Cookie angemeldet (`HttpOnly`, `Secure`, `SameSite=Lax`). In der DB liegen nur SHA-256-Hashes.
+Kein Passwort. Zwei Wege:
+
+**QR-Code oder Code (weitere Geräte):** Ein Gerät ohne Anmeldung zeigt beim Öffnen von FitPath einen QR-Code und eine 6-stellige Zahl (5 Minuten gültig, danach automatisch neu). Auf einem schon verbundenen Gerät den QR-Code mit der Kamera scannen (öffnet `…/#pair=123456`) oder unter **Mehr → Geräte → Code eingeben** die Zahl eintippen. Das verbundene Gerät zeigt Betriebssystem und Browser der Anfrage („Windows · Chrome“) und fragt nach einem Namen; nach **Zulassen** ist das neue Gerät innerhalb von 2 Sekunden angemeldet. Sicherheit: Freigeben kann nur ein angemeldetes Gerät; das Cookie bekommt nur der Browser, der die Anfrage gestellt hat (er hält dafür ein zufälliges Geheimnis, der Code allein nützt nichts). An deine Geräte wird nichts geschickt, solange du nicht selbst scannst oder tippst. Höchstens 20 neue Anfragen pro Minute und 30 offene insgesamt (`app/auth.py`, `PAIR_*`).
+
+**Einmal-Link (erstes Gerät):** Der Server erzeugt einen Einmal-Link, 15 Minuten gültig, nur einmal nutzbar. Der Link öffnet zuerst eine Bestätigungsseite; eingelöst wird er erst mit **Verbinden** (POST). Grund: Messenger und Browser rufen Links für die Vorschau per GET ab und hätten ihn sonst verbraucht, bevor das Handy ihn öffnet. Danach bleibt das Gerät 400 Tage per Session-Cookie angemeldet (`HttpOnly`, `Secure`, `SameSite=Lax`). In der DB liegen nur SHA-256-Hashes.
 
 ```bash
 docker compose exec fitpath python -m app.cli link Handy     # Link erzeugen
@@ -166,7 +170,7 @@ docker compose exec fitpath python -m app.cli rename <id> PC # Gerät umbenennen
 docker compose exec fitpath python -m app.cli import-bls     # BLS-Seed neu einlesen
 ```
 
-Weitere Geräte lassen sich in der App unter **Mehr → Geräte** verbinden und dort mit ✏️ umbenennen. Der Name kommt sonst aus dem Link (`link Handy` heißt „Handy“, egal welches Gerät ihn öffnet), ohne Namen aus dem Browser.
+Unter **Mehr → Geräte** lassen sich Geräte umbenennen (✏️) und abmelden; dort gibt es auch weiterhin einen Anmeldelink, falls kein zweites Gerät zur Hand ist. Der Name kommt sonst aus dem Link (`link Handy` heißt „Handy“, egal welches Gerät ihn öffnet), ohne Namen aus dem Browser.
 
 Uhrzeiten und Zahlen gibt die App unabhängig von der Browsersprache ein: Uhrzeiten als eigenes 24-Stunden-Feld (HH:MM, „2030“ wird 20:30), Kommazahlen mit Komma oder Punkt, Tage als deutsche Auswahl. Die eingebauten Felder `type="time"`/`type="date"` zeigen in einem englischen Browser AM/PM bzw. MM/TT.
 

@@ -87,6 +87,14 @@ CREATE TABLE IF NOT EXISTS devices (
     created TEXT NOT NULL, last_seen TEXT);
 CREATE TABLE IF NOT EXISTS link_tokens (
     token_hash TEXT PRIMARY KEY, expires TEXT NOT NULL, name TEXT);
+CREATE TABLE IF NOT EXISTS pair_requests (
+    rid_hash TEXT PRIMARY KEY,         -- Hash des Geheimnisses, das nur das neue Gerät kennt
+    code TEXT NOT NULL,                -- 6 Ziffern, angezeigt auf dem neuen Gerät
+    expires TEXT NOT NULL,
+    ua TEXT,
+    created TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',   -- pending | approved | denied
+    name TEXT);
 CREATE TABLE IF NOT EXISTS push_subs (
     endpoint TEXT PRIMARY KEY, p256dh TEXT NOT NULL, auth TEXT NOT NULL,
     device_id INTEGER, created TEXT NOT NULL);
