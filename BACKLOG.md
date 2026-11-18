@@ -5,12 +5,12 @@ Doku: [README.md](README.md)
 ## Offen
 
 ### Schritt 3 – Motivation
-- Level und Erfahrungspunkte (wie QuitPath), Abzeichen: Streak „jeden Tag erfasst“, Schrittziel, −5 %/−10 %, 7 Tage im Budget.
+- Level und Erfahrungspunkte, Abzeichen: Streak „jeden Tag erfasst“, Schrittziel, −5 %/−10 %, 7 Tage im Budget.
 - Wochen-Challenge (z. B. „5× Gemüse zum Mittag“, „3 Tage über 8.000 Schritte“), Konfetti-Feier.
 - SOS Heißhunger: Wenn-Dann-Plan je Auslöser (Stress, Langeweile, abends Fernsehen), 10-Minuten-Ring, Glas Wasser, Ergebnis speichern.
-- Push zu gelernten Snack-Uhrzeiten (15 Minuten vorher), wie die kritischen Zeiten in QuitPath.
+- Push zu gelernten Snack-Uhrzeiten (15 Minuten vorher) (aus den Uhrzeiten früherer Snacks gelernt).
 
-### Schritt 4 – KI (LiteLLM-Key `fitpath`, Budget wie QuitPath 5 $ / 30 Tage)
+### Schritt 4 – KI
 - Coach mit Allowlist (Budget, Trend, Schritte, Top-Snack-Zeiten; nie Notizen).
 - Foto → Schätzung (nur mit Schalter, Standard aus).
 - Wochenrückblick.

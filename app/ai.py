@@ -74,7 +74,7 @@ async def _complete(system: str, user: str, max_tokens: int = 700) -> str:
     async with httpx.AsyncClient(timeout=httpx.Timeout(45, connect=10)) as client:
         resp = await client.post(
             CHAT_URL, headers=HEADERS,
-            # keine temperature: claude-sonnet-5-5 lehnt Werte ≠ 1 ab (Stolperstein aus QuitPath)
+            # keine temperature: claude-sonnet-5-5 lehnt Werte ≠ 1 ab
             json={"model": MODEL_FAST, "max_tokens": max_tokens,
                   "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]})
     if resp.status_code != 200:

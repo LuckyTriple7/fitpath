@@ -1,6 +1,6 @@
 # FitPath
 
-Persönliche Abnehm-App als PWA für eine Person, selbst gehostet mit Docker (Schwester-App von QuitPath). Statt reinem Kalorienzählen gibt es ein eigenes Punktesystem (umschaltbar auf kcal). Schritte, Gewicht und Körperfett kommen automatisch aus Health Connect.
+Persönliche Abnehm-App als PWA für eine Person, selbst gehostet mit Docker. Statt reinem Kalorienzählen gibt es ein eigenes Punktesystem (umschaltbar auf kcal). Schritte, Gewicht und Körperfett kommen automatisch aus Health Connect.
 
 
 ## Installation
@@ -168,7 +168,7 @@ Uhrzeiten und Zahlen gibt die App unabhängig von der Browsersprache ein: Uhrzei
 | `app/ingest.py` | Health-Connect-Webhook, Koppel-Link, Diagnose |
 | `app/ai.py` | Erfassen per Text über LiteLLM |
 | `app/push.py` | VAPID (erzeugt beim ersten Start), Erinnerungen alle 5 Minuten |
-| `app/auth.py`, `app/cli.py`, `app/backup.py` | Einmal-Links, Geräte, Kommandozeile, tägliche Sicherung (aus QuitPath) |
+| `app/auth.py`, `app/cli.py`, `app/backup.py` | Einmal-Links, Geräte, Kommandozeile, tägliche Sicherung |
 | `app/static/` | PWA: `index.html`, `app.js`, `styles.css`, `sw.js`, Manifest, Icons |
 | `seed/bls40.csv.gz` | BLS 4.0 in kompakter Form |
 | `tools/bls_convert.py` | BLS-Excel → Seed (nur lokal, braucht `openpyxl`) |
