@@ -91,7 +91,7 @@ Abgerufen werden nur öffentliche Adressen (kein Zugriff aufs Heimnetz), höchst
 
 ## Motivation
 
-Erfahrungspunkte entstehen aus den Daten selbst: je erfasstem Tag 10, je Tag im Budget 10 (abgeschlossene Tage), je Tag mit erreichtem Schrittziel 10, je Wiegetag 5, je überstandenem Heißhunger 15, je Abzeichen 50, je geschaffter Wochen-Challenge 50. Ein einmal erreichtes Abzeichen bleibt, auch wenn z. B. das Gewicht später wieder steigt (gespeichert in `unlocked`). Die Wochen-Challenge wechselt jede Woche (Montag), „Andere“ zieht die nächste; geschafft ist sie, sobald die Zählung das Ziel erreicht.
+Erfahrungspunkte entstehen aus den Daten selbst: je erfasstem Tag 10, je Tag im Budget 10 (abgeschlossene Tage), je Tag mit erreichtem Schrittziel 10, je Wiegetag 5, je überstandenem Heißhunger 15, je Abzeichen 50, je geschaffter Wochen-Challenge 50. Gezählt wird ab dem Einrichtungstag (`start_date`, gesetzt beim Onboarding): ältere Daten, etwa ein nachgeladenes Jahr aus Health Connect, erscheinen in Statistik und Verlauf, bringen aber keine Abzeichen und keine Erfahrungspunkte. Ein einmal erreichtes Abzeichen bleibt, auch wenn z. B. das Gewicht später wieder steigt (gespeichert in `unlocked`). Die Wochen-Challenge wechselt jede Woche (Montag), „Andere“ zieht die nächste; geschafft ist sie, sobald die Zählung das Ziel erreicht.
 
 ## Punktesystem
 

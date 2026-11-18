@@ -6,6 +6,10 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+### Behoben
+
+- Erfolge, Erfahrungspunkte und Tage in Folge zählen erst ab dem Einrichtungstag. Nachgeladene ältere Daten (z. B. ein Jahr Schritte und Gewicht über „Verlauf senden“ im Life Dashboard) schalteten bisher massenhaft Abzeichen frei. Beim ersten Start nach dem Update werden die Abzeichen einmalig neu berechnet.
+
 ## [0.7.0] – 2026-11-18
 
 ### Hinzugefügt

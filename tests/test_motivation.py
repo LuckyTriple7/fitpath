@@ -16,7 +16,7 @@ def client():
     with db.connect() as conn:
         for t in ("food_log", "body", "activity", "events"):
             conn.execute(f"DELETE FROM {t}")
-        for k in ("unlocked", "challenges_done", "challenge_skips"):
+        for k in ("unlocked", "challenges_done", "challenge_skips", "start_date", "motivation_rev"):
             conn.execute("DELETE FROM settings WHERE key = ?", (k,))
         url = auth.create_link(conn, "Test")
     assert c.post(url.replace("http://testserver", ""), follow_redirects=False).status_code == 303
@@ -46,6 +46,7 @@ def test_streak_badges_xp_and_challenge():
     c = client()
     today = date.fromisoformat(c.get("/api/state").json()["today"])
     with db.connect() as conn:
+        db.set_setting(conn, "start_date", (today - timedelta(days=10)).isoformat())
         for i in range(1, 8):          # 7 Tage mit Einträgen bis gestern, je 3 Mahlzeiten (0-Punkte-Obst)
             d = (today - timedelta(days=i)).isoformat()
             for meal in ("fruehstueck", "mittag", "abend"):
@@ -114,4 +115,25 @@ def test_critical_hours_and_plans():
                                                 "plans": {"Feierabend": "Erst duschen"}})
     s = r.json()["settings"]
     assert s["craving_triggers"] == ["Stress", "Feierabend"] and s["plans"] == {"Feierabend": "Erst duschen"}
+    c.__exit__(None, None, None)
+
+
+def test_only_from_setup_day():
+    """Nachgeladene Daten vor dem Einrichtungstag zählen nicht für Erfolge."""
+    c = client()
+    today = date.fromisoformat(c.get("/api/state").json()["today"])
+    with db.connect() as conn:
+        db.set_setting(conn, "start_date", today.isoformat())
+        for i in range(1, 60):     # zwei Monate Schritte und Gewicht aus der Vergangenheit
+            d = (today - timedelta(days=i)).isoformat()
+            conn.execute("INSERT OR REPLACE INTO activity (day, source, steps, updated) VALUES (?, 'hc', 25000, ?)", (d, db.iso(db.now_utc())))
+            conn.execute("INSERT INTO body (ts, day, kind, value, source) VALUES (?, ?, 'weight', 99, 'hc')", (f"{d}T06:00:00+00:00", d))
+        # alter Stand: früher freigeschaltete Abzeichen aus der Vergangenheit
+        db.set_setting(conn, "unlocked", {"steps10": "2026-01-01T00:00:00+00:00", "weigh10": "2026-01-01T00:00:00+00:00"})
+        db.set_setting(conn, "motivation_rev", 1)
+    m = c.get("/api/state").json()["motivation"]
+    got = {b["id"] for b in m["badges"] if b["unlocked"]}
+    assert not {"steps1", "steps10", "steps20k", "weigh10"} & got
+    parts = {p["label"]: p["count"] for p in m["xp"]["parts"]}
+    assert parts["Schrittziel erreicht"] == 0 and parts["Gewogen"] <= 1
     c.__exit__(None, None, None)

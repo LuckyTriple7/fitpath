@@ -102,14 +102,12 @@ def day_data(conn, s: dict, first: date, last: date) -> dict:
 
 
 def _start(conn, s: dict, today: date) -> date:
-    cands = [today]
+    """Erfolge zählen ab dem Einrichtungstag. Nachgeladene ältere Daten (z. B. ein Jahr Schritte und
+    Gewicht aus Health Connect) zählen für Statistik und Verlauf, nicht für Erfolge."""
     if s.get("start_date"):
-        cands.append(db.parse_day(s["start_date"]))
-    for q in ("SELECT MIN(day) FROM food_log", "SELECT MIN(day) FROM body", "SELECT MIN(day) FROM activity"):
-        v = conn.execute(q).fetchone()[0]
-        if v:
-            cands.append(db.parse_day(v))
-    return max(min(cands), today - timedelta(days=730))
+        return min(db.parse_day(s["start_date"]), today)
+    v = conn.execute("SELECT MIN(day) FROM food_log").fetchone()[0]
+    return min(db.parse_day(v), today) if v else today
 
 
 def _in_budget(x: dict, budget_points: int) -> bool:
@@ -223,8 +221,13 @@ def state(conn, s: dict) -> dict:
     """Abzeichen (mit Freischaltung), Challenge, Level und XP für die Oberfläche."""
     sm = summary(conn, s)
     unlocked = dict(s.get("unlocked") or {})
+    changed = False
+    if int(s.get("motivation_rev") or 0) < 2:
+        # einmalig neu rechnen: bis 0.7.0 zählten auch Daten vor dem Einrichtungstag
+        unlocked, changed = {}, True
+        db.set_setting(conn, "motivation_rev", 2)
     now = db.iso(db.now_utc())
-    badges, changed = [], False
+    badges = []
     for bid, icon, title, metric, target in BADGES:
         value = sm.get(metric, 0)
         if value >= target and bid not in unlocked:
