@@ -1,4 +1,4 @@
-"""Erfassen per Text über LiteLLM.
+"""Erfassen per Text über einen OpenAI-kompatiblen KI-Endpunkt.
 
 Ablauf: Die KI zerlegt eine freie Beschreibung („2 Brötchen mit Käse und Kaffee mit Milch“)
 in Lebensmittel mit geschätzter Menge und einem Suchbegriff in der Sprache einer deutschen
@@ -16,10 +16,32 @@ import httpx
 
 from . import diary, foods
 
-LITELLM_URL = os.environ.get("LITELLM_URL", "http://litellm:4000").rstrip("/")
-LITELLM_KEY = os.environ.get("LITELLM_API_KEY", "")
-MODEL_FAST = os.environ.get("FITPATH_MODEL_FAST", "claude-haiku-5-5")
-HEADERS = {"Authorization": f"Bearer {LITELLM_KEY}", "x-caveman-style": "off"}
+def _env(*names: str, default: str = "") -> str:
+    """Erster gesetzter Wert; die alten Namen (LITELLM_…) gelten weiter."""
+    for n in names:
+        v = os.environ.get(n, "").strip()
+        if v:
+            return v
+    return default
+
+
+# KI über einen OpenAI-kompatiblen Endpunkt (LiteLLM, OpenRouter, OpenAI, Ollama …).
+# Adresse mit oder ohne /v1. Ohne Key ist die KI aus (Ollama: beliebigen Key eintragen).
+AI_URL = _env("AI_BASE_URL", "LITELLM_URL", default="http://litellm:4000").rstrip("/")
+AI_KEY = _env("AI_API_KEY", "LITELLM_API_KEY")
+CHAT_URL = AI_URL + ("/chat/completions" if AI_URL.endswith("/v1") else "/v1/chat/completions")
+MODEL_FAST = _env("AI_MODEL_FAST", "FITPATH_MODEL_FAST", default="claude-haiku-5-5")
+
+HEADERS = {"Content-Type": "application/json",
+           # schaltet ein Proxy-Plugin für knappe Antworten ab, andere Anbieter ignorieren den Header
+           "x-caveman-style": "off"}
+if AI_KEY:
+    HEADERS["Authorization"] = f"Bearer {AI_KEY}"
+try:  # zusätzliche Header als JSON, z. B. {"HTTP-Referer": "https://…"} für OpenRouter
+    HEADERS.update({str(k): str(v) for k, v in json.loads(_env("AI_HEADERS", default="{}")).items()})
+except (ValueError, AttributeError):
+    print("AI_HEADERS ist kein JSON-Objekt, ignoriert", flush=True)
+
 
 PARSE_SYSTEM = """Du zerlegst eine Beschreibung von Essen und Trinken in einzelne Lebensmittel.
 Antworte ausschließlich mit JSON, ohne Text davor oder danach:
@@ -45,13 +67,13 @@ Antworte ausschließlich mit JSON, ohne Text davor oder danach:
 
 
 def available() -> bool:
-    return bool(LITELLM_KEY)
+    return bool(AI_KEY)
 
 
 async def _complete(system: str, user: str, max_tokens: int = 700) -> str:
     async with httpx.AsyncClient(timeout=httpx.Timeout(45, connect=10)) as client:
         resp = await client.post(
-            f"{LITELLM_URL}/v1/chat/completions", headers=HEADERS,
+            CHAT_URL, headers=HEADERS,
             # keine temperature: claude-sonnet-5-5 lehnt Werte ≠ 1 ab (Stolperstein aus QuitPath)
             json={"model": MODEL_FAST, "max_tokens": max_tokens,
                   "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]})

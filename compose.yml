@@ -20,10 +20,11 @@ services:
       PUBLIC_URL: ${FITPATH_PUBLIC_URL:?FITPATH_PUBLIC_URL fehlt in .env}
       # Kontakt im User-Agent für Open Food Facts (deren Wunsch an Apps), optional
       OFF_CONTACT: ${FITPATH_OFF_CONTACT:-}
-      # KI (Erfassen per Text) über einen OpenAI-kompatiblen Proxy (z. B. LiteLLM); ohne Key ausgeblendet
-      LITELLM_URL: ${FITPATH_LITELLM_URL:-http://litellm:4000}
-      LITELLM_API_KEY: ${FITPATH_LITELLM_KEY:-}
-      FITPATH_MODEL_FAST: ${FITPATH_MODEL_FAST:-claude-haiku-5-5}
+      # KI (Erfassen per Text) über einen OpenAI-kompatiblen Endpunkt; ohne Key ausgeblendet
+      AI_BASE_URL: ${FITPATH_AI_URL:-${FITPATH_LITELLM_URL:-http://litellm:4000}}
+      AI_API_KEY: ${FITPATH_AI_KEY:-${FITPATH_LITELLM_KEY:-}}
+      AI_MODEL_FAST: ${FITPATH_AI_MODEL:-${FITPATH_MODEL_FAST:-claude-haiku-5-5}}
+      AI_HEADERS: ${FITPATH_AI_HEADERS:-}
 
     # Daten im Stack-Ordner (Datenbank, VAPID-Schlüssel, tägliche Sicherung data/backup/)
     volumes:

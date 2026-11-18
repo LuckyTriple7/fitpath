@@ -123,7 +123,7 @@ Größe: Eine Lieferung kann einige MB haben (vor allem beim Nachladen der Verga
 
 ## KI und Datenschutz
 
-Erfassen per Text läuft optional über einen OpenAI-kompatiblen Proxy wie LiteLLM (`FITPATH_LITELLM_URL`, `FITPATH_LITELLM_KEY`, Modell `claude-haiku-5-5`, Header `x-caveman-style: off`, keine `temperature`). Ohne Key (`FITPATH_LITELLM_KEY` leer) ist ✨ ausgeblendet. An die KI geht **nur der eingegebene Text**, keine weiteren Daten aus der App. Die KI liefert Suchbegriffe in BLS-Sprache und geschätzte Mengen (`app/ai.py`, `PARSE_SYSTEM`); welches Lebensmittel erfasst wird, entscheidet die Suche in der eigenen DB und am Ende der Nutzer.
+Erfassen per Text läuft optional über einen beliebigen OpenAI-kompatiblen Endpunkt: LiteLLM, OpenRouter, OpenAI, ein lokales Ollama … (`FITPATH_AI_URL` mit oder ohne `/v1`, `FITPATH_AI_KEY`, `FITPATH_AI_MODEL`, Standard `claude-haiku-5-5`, Beispiele in `.env.example`; Header `x-caveman-style: off`, keine `temperature`). Ohne Key ist ✨ ausgeblendet (Ollama braucht keinen, dann einen beliebigen eintragen). An die KI geht **nur der eingegebene Text**, keine weiteren Daten aus der App. Die KI liefert Suchbegriffe in BLS-Sprache und geschätzte Mengen (`app/ai.py`, `PARSE_SYSTEM`); welches Lebensmittel erfasst wird, entscheidet die Suche in der eigenen DB und am Ende der Nutzer.
 
 Bei LiteLLM einen eigenen virtuellen Key mit kleinem Budget anlegen, der nur das gewählte Modell darf.
 

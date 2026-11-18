@@ -83,7 +83,7 @@ def test_ai_parse(monkeypatch):
         assert "Brötchen" in user
         return ('```json\n{"meal": "fruehstueck", "items": [{"label": "2 Brötchen", "search": "Weizenbrötchen", "grams": 120},'
                 ' {"label": "Kaffee mit Milch", "search": "Kaffee (Getränk)", "grams": 150}]}\n```')
-    monkeypatch.setattr(ai, "LITELLM_KEY", "test")
+    monkeypatch.setattr(ai, "AI_KEY", "test")
     monkeypatch.setattr(ai, "_complete", fake)
     assert c.get("/api/state").json()["ai"]
     r = c.post("/api/ai/parse", headers=H, json={"text": "2 Brötchen und Kaffee mit Milch"})
