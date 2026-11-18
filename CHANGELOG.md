@@ -6,6 +6,8 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+## [0.6.0] – 2026-11-18
+
 ### Hinzugefügt
 - Level und Erfahrungspunkte, 16 Abzeichen, Wochen-Challenge mit automatischer Zählung, Konfetti; Übersicht **Erfolge**.
 - Heißhunger-SOS (Knopf oben): Auslöser, eigener Wenn-Dann-Plan, 10-Minuten-Timer, Ergebnis wird gespeichert; Pläne unter **Mehr → Wenn-Dann-Pläne**.
