@@ -6,6 +6,8 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+## [0.7.0] – 2026-11-18
+
 ### Hinzugefügt
 - Rezept-Import per Link (Cookidoo, Chefkoch und andere Seiten mit schema.org-Rezeptdaten): Zutaten werden in Gramm umgerechnet und Lebensmitteln zugeordnet (mit KI genauer), Prüfliste mit kcal-Vergleich, Rückfall auf die Werte der Seite.
 - Such-Synonyme für Rezept-Zutaten (Mehl, Zucker, Salz, Sahne, Rapsöl, Brühe, Knoblauchzehen …).
