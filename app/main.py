@@ -13,7 +13,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 
-from . import __version__, ai, auth, backup, body, db, diary, foods, ingest, motivation, points, push, recipe_import
+from . import __version__, ai, auth, backup, body, db, diary, foods, ingest, motivation, points, push, recipe_import, swaps
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 MAX_INGEST_BYTES = 12 * 1024 * 1024
@@ -575,7 +575,9 @@ def _clean_event(data: dict) -> dict:
     return {"id": _clean_text(data.get("id"), 40) or str(uuid.uuid4()), "ts": db.iso(ts), "kind": "craving",
             "trigger": _clean_text(data.get("trigger"), 40) or None, "intensity": num("intensity", 1, 10),
             "resisted": None if data.get("resisted") is None else (1 if data["resisted"] else 0),
-            "duration_s": num("duration_s", 0, 86400), "created": db.iso(db.now_utc())}
+            "duration_s": num("duration_s", 0, 86400), "created": db.iso(db.now_utc()),
+            "food": data.get("food") if data.get("food") in swaps.KEYS else None,
+            "swap": _clean_text(data.get("swap"), 40) or None}
 
 
 @app.post("/api/events")
@@ -584,10 +586,10 @@ async def event_add(request: Request, device=Depends(auth.require)):
     e = _clean_event(await request.json())
     with db.connect() as conn:
         conn.execute(
-            "INSERT INTO events (id, ts, kind, trigger, intensity, resisted, duration_s, created) VALUES "
-            "(:id, :ts, :kind, :trigger, :intensity, :resisted, :duration_s, :created) ON CONFLICT(id) DO UPDATE SET "
-            "trigger = excluded.trigger, intensity = excluded.intensity, resisted = excluded.resisted, "
-            "duration_s = excluded.duration_s", e)
+            "INSERT INTO events (id, ts, kind, trigger, intensity, resisted, duration_s, created, food, swap) VALUES "
+            "(:id, :ts, :kind, :trigger, :intensity, :resisted, :duration_s, :created, :food, :swap) ON CONFLICT(id) "
+            "DO UPDATE SET trigger = excluded.trigger, intensity = excluded.intensity, resisted = excluded.resisted, "
+            "duration_s = excluded.duration_s, food = excluded.food, swap = excluded.swap", e)
         return _state(conn)
 
 
@@ -603,6 +605,13 @@ def event_delete(eid: str, device=Depends(auth.require)):
     with db.connect() as conn:
         conn.execute("DELETE FROM events WHERE id = ?", (eid,))
         return _state(conn)
+
+
+@app.get("/api/swaps")
+def swap_catalog(device=Depends(auth.require)):
+    """Lieber-Tausch je Gelüst mit Punkten, oft gewählte zuerst."""
+    with db.connect() as conn:
+        return swaps.catalog(conn)
 
 
 @app.post("/api/challenge/skip")

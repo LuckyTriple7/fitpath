@@ -137,3 +137,26 @@ def test_only_from_setup_day():
     parts = {p["label"]: p["count"] for p in m["xp"]["parts"]}
     assert parts["Schrittziel erreicht"] == 0 and parts["Gewogen"] <= 1
     c.__exit__(None, None, None)
+
+
+def test_swaps_catalog_ranking_and_stats():
+    from app import swaps
+    c = client()
+    cat = c.get("/api/swaps").json()
+    assert [x["key"] for x in cat] == [x["key"] for x in swaps.CRAVINGS]
+    for craving in cat:                  # alle BLS-Codes vorhanden, jeder Tausch günstiger als das Original
+        assert craving["treat"] and len(craving["swaps"]) == len(next(x for x in swaps.CRAVINGS if x["key"] == craving["key"])["swaps"])
+        for s in craving["swaps"]:
+            assert s["points"] < craving["treat"]["points"] or s["points"] == 0, (craving["key"], s["key"])
+    choco = cat[0]
+    assert choco["swaps"][0]["key"] == "bitter"
+    for _ in range(2):
+        c.post("/api/events", headers=H, json={"kind": "craving", "food": "schokolade", "swap": "kakao", "resisted": True})
+    c.post("/api/events", headers=H, json={"kind": "craving", "food": "schokolade", "swap": "genuss", "resisted": False})
+    c.post("/api/events", headers=H, json={"kind": "craving", "food": "quatsch", "resisted": True})
+    choco = c.get("/api/swaps").json()[0]
+    assert choco["swaps"][0]["key"] == "kakao" and choco["swaps"][0]["uses"] == 2
+    st = c.get("/api/stats?days=7").json()["cravings"]
+    assert st["total"] == 4 and st["foods"] == [{"food": "schokolade", "emoji": "🍫", "label": "Schokolade", "count": 3,
+                                                  "swapped": 2, "best": "Heißer Kakao"}]
+    c.__exit__(None, None, None)

@@ -507,19 +507,51 @@ const SOS_TIPS = ["Ein großes Glas Wasser trinken – Durst fühlt sich oft wie
   "Hände beschäftigen: aufräumen, abwaschen, ein Rätsel.", "Heißhunger ist eine Welle: Sie steigt, erreicht einen Gipfel und ebbt nach wenigen Minuten ab.",
   "Wenn doch etwas: Obst oder Gemüse kosten 0 Punkte."];
 
+let swapCat = null;   // Lieber-Tausch-Katalog, einmal je Sitzung geladen
+
+function swapVal(x) {
+  return isPoints() ? (x.points ? `${x.points} P` : `<span class="zero">0 P</span>`) : `${x.kcal} kcal`;
+}
+
+function swapCard(c) {
+  const P = isPoints(), o = S.overview, t = c.treat;
+  const left = o.day === S.today ? (P ? o.week.today_left_points : o.week.today_left_kcal) : null;
+  let hint = "";
+  if (t && left != null) {
+    const cost = P ? t.points : t.kcal, unit = P ? "P" : "kcal";
+    hint = left >= cost ? `Du hast heute noch ${left} ${unit} – das passt rein. Langsam essen, ohne Handy oder Fernseher.`
+      : `Du hast heute noch ${left} ${unit} – das wären ${cost - Math.max(left, 0)} ${unit} drüber (geht aus der Wochenreserve).`;
+  }
+  return `<div class="card" style="border-color:var(--accent)"><small class="muted">Lieber so – Lust auf ${esc(c.label)}</small>
+    <ul class="list">${c.swaps.map(x => `<li class="tap" data-swap="${esc(x.key)}"><div class="bd"><b>${esc(x.name)}</b>
+      <div class="meta">${esc(x.tip)}${x.uses ? ` · ${x.uses}× gewählt` : ""}</div></div><span class="val">${swapVal(x)}</span></li>`).join("")}</ul>
+    <p class="note">Tippen = als Snack erfassen und Heißhunger als überstanden zählen.</p>
+    ${t ? `<div class="spread mt"><div><b>Oder bewusst genießen:</b> ${esc(t.name)} = ${swapVal(t)}<div class="note">${hint}</div></div></div>
+      <button class="btn block mt" id="sos-treat">🍫 Bewusst genießen und erfassen</button>` : ""}</div>`;
+}
+
 function openSOS() {
   const s = S.settings, triggers = s.craving_triggers || [];
   const id = uuid(), started = Date.now(), total = 600;
-  let timer = null, trigger = null, intensity = 6;
-  const save = async resisted => {
-    const body = { id, kind: "craving", trigger, intensity, resisted, duration_s: Math.round((Date.now() - started) / 1000) };
+  let timer = null, trigger = null, intensity = 6, food = null;
+  const save = async (resisted, swap = null) => {
+    const body = { id, kind: "craving", trigger, intensity, resisted, food: food && food.key, swap, duration_s: Math.round((Date.now() - started) / 1000) };
     try { S = await api("/api/events", { method: "POST", body }); } catch (e) { toast(e.message); }
+  };
+  const logParts = async parts => {
+    for (const p of parts) {
+      if (!(await saveEntry({ id: uuid(), food_id: p.food_id, grams: p.grams, portion: p.portion, meal: "snack", day: S.today }))) return false;
+    }
+    lists = null;
+    return true;
   };
   openSheet(`<h2>🍫 Heißhunger</h2>
     <p class="muted">Was ist gerade los?</p>
     ${chipGroup("trig", triggers.map(t => [t, esc(t)]), null)}
     <label class="f"><span>Wie stark? <b id="int-v">${intensity}</b> von 10</span><input type="range" min="1" max="10" value="${intensity}" id="int"></label>
     <div id="sos-plan"></div>
+    <div id="sos-food"></div>
+    <div id="sos-swap"></div>
     <div class="center"><div class="ring">${ringSvg(1, false)}<div class="t"><b id="sos-clock">10:00</b><span>Welle aussitzen</span></div></div></div>
     <p class="center" id="sos-tip">${esc(SOS_TIPS[0])}</p>
     <div class="row nowrap mt"><button class="btn grow" id="sos-ate">Doch gegessen</button><button class="btn primary grow" id="sos-ok">💪 Geschafft</button></div>
@@ -530,6 +562,33 @@ function openSOS() {
         : `<p class="note">Noch kein Plan für ${esc(trigger)} – unter <b>Mehr → Wenn-Dann-Pläne</b> anlegen.</p>`) : "";
     };
     bindChips(root, (_, v) => { trigger = v; showPlan(); });
+    const showFoods = () => {
+      if (!swapCat || !swapCat.length) return;
+      $("#sos-food", root).innerHTML = `<p class="muted">Worauf hast du Lust?</p><div class="chips">${swapCat.map(c =>
+        `<button type="button" class="chip${food && food.key === c.key ? " on" : ""}" data-food="${esc(c.key)}">${c.emoji} ${esc(c.label)}</button>`).join("")}</div>`;
+    };
+    const showSwaps = () => {
+      $("#sos-swap", root).innerHTML = food ? swapCard(food) : "";
+      const tb = $("#sos-treat", root);
+      tb && (tb.onclick = async () => {
+        if (!(await logParts(food.treat.parts))) return;
+        await save(false, "genuss"); closeSheet(); viewToday(); toast("Bewusst genießen – ist erfasst. Kein schlechtes Gewissen.");
+      });
+    };
+    $("#sos-food", root).onclick = e => {
+      const b = e.target.closest("[data-food]"); if (!b) return;
+      food = food && food.key === b.dataset.food ? null : swapCat.find(c => c.key === b.dataset.food);
+      showFoods(); showSwaps();
+    };
+    $("#sos-swap", root).onclick = async e => {
+      const li = e.target.closest("[data-swap]"); if (!li || !food) return;
+      const x = food.swaps.find(w => w.key === li.dataset.swap);
+      if (!x || !(await logParts(x.parts))) return;
+      await save(true, x.key); swapCat = null; closeSheet(); viewToday();
+      toast(`Guter Tausch: ${x.name} erfasst. +15 XP 💪`); celebrate(pendingCelebrations());
+    };
+    if (swapCat) showFoods();
+    else api("/api/swaps").then(c => { swapCat = c; showFoods(); }).catch(() => { /* offline: ohne Tausch-Vorschläge */ });
     $("#int", root).oninput = e => { intensity = +e.target.value; $("#int-v", root).textContent = intensity; };
     let tip = 0;
     timer = setInterval(() => {
@@ -540,8 +599,8 @@ function openSOS() {
       if (!left) { clearInterval(timer); vibrate([100, 50, 100]); $("#sos-tip", root).textContent = "Zehn Minuten geschafft – die Welle ist vorbei. Wie geht's dir jetzt?"; }
     }, 1000);
     sheetCleanup = () => clearInterval(timer);
-    $("#sos-ok", root).onclick = async () => { await save(true); closeSheet(); viewToday(); toast("Stark! +15 XP 💪"); celebrate(pendingCelebrations()); };
-    $("#sos-ate", root).onclick = async () => { await save(false); closeSheet(); viewToday(); toast("Kein Drama. Trag's ein, dann bleibt die Übersicht ehrlich."); openAdd("snack"); };
+    $("#sos-ok", root).onclick = async () => { await save(true); swapCat = null; closeSheet(); viewToday(); toast("Stark! +15 XP 💪"); celebrate(pendingCelebrations()); };
+    $("#sos-ate", root).onclick = async () => { await save(false); closeSheet(); viewToday(); toast("Kein Drama. Trag's ein, dann bleibt die Übersicht ehrlich."); openAdd("snack", food ? food.search : ""); };
   });
 }
 
@@ -614,6 +673,7 @@ function cravingHtml(c) {
   return `<div class="card"><div class="card-head"><h2>🍫 Heißhunger</h2><small>${c.resisted} von ${c.total} überstanden</small></div>
     <div class="progress good"><i style="width:${rate}%"></i></div><small>${rate} % ausgesessen</small>
     ${c.triggers.length ? `<ul class="list mt">${c.triggers.map(t => `<li><div class="bd"><b>${esc(t.trigger)}</b><div class="meta">${t.count}× · ${t.resisted} überstanden</div></div></li>`).join("")}</ul>` : ""}
+    ${(c.foods || []).length ? `<p class="muted mt">Lust auf</p><ul class="list">${c.foods.map(f => `<li><div class="bd"><b>${f.emoji} ${esc(f.label)}</b><div class="meta">${f.count}× · ${f.swapped}× getauscht${f.best ? ` · am liebsten: ${esc(f.best)}` : ""}</div></div></li>`).join("")}</ul>` : ""}
     ${c.hours.length ? `<p class="note">Typische Zeiten: ${c.hours.map(h => `${h.hour}–${h.hour + 1} Uhr`).join(", ")}.${S.settings.snack_push ? " FitPath erinnert etwa 15 Minuten vorher." : ""}</p>` : ""}</div>`;
 }
 
@@ -622,7 +682,7 @@ function cravingHtml(c) {
 let lists = null;
 let addTab = "recent";
 
-function openAdd(meal) {
+function openAdd(meal, query = "") {
   let timer = null, seq = 0;
   openSheet(`<div class="sheet-search">
       ${chipGroup("meal", MEALS.map(([k, l, i]) => [k, `${i} ${l}`]), meal, false, "scroll")}
@@ -671,7 +731,7 @@ function openAdd(meal) {
     $("#ai-text", root) && ($("#ai-text", root).onclick = () => openTextEntry(curMeal(), q.value.trim()));
     $("#recipe", root).onclick = () => openRecipe(null, curMeal());
     $("#custom", root).onclick = () => openCustom({ name: q.value.trim() }, curMeal());
-    showLists();
+    if (query) { q.value = query; runSearch(); } else showLists();
     setTimeout(() => q.focus(), 250);
   }, true);
 }

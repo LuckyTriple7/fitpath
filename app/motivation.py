@@ -291,4 +291,18 @@ def craving_stats(conn, first: str) -> dict:
             t[0] += 1
             t[1] += 1 if r["resisted"] else 0
     top = sorted(({"trigger": k, "count": v[0], "resisted": v[1]} for k, v in trig.items()), key=lambda x: -x["count"])[:6]
-    return {"total": total, "resisted": resisted, "triggers": top, "hours": critical_hours(conn)}
+    from .swaps import CRAVINGS, TREAT
+    names = {c["key"]: (c["emoji"], c["label"], {s["key"]: s["name"] for s in c["swaps"]}) for c in CRAVINGS}
+    per_food: dict = {}
+    for r in rows:
+        if r["food"] in names:
+            f = per_food.setdefault(r["food"], {"count": 0, "swapped": 0, "swaps": {}})
+            f["count"] += 1
+            if r["swap"] and r["swap"] != TREAT:
+                f["swapped"] += 1
+                label = names[r["food"]][2].get(r["swap"], r["swap"])
+                f["swaps"][label] = f["swaps"].get(label, 0) + 1
+    food_top = [{"food": k, "emoji": names[k][0], "label": names[k][1], "count": v["count"], "swapped": v["swapped"],
+                 "best": max(v["swaps"], key=v["swaps"].get) if v["swaps"] else None}
+                for k, v in sorted(per_food.items(), key=lambda x: -x[1]["count"])]
+    return {"total": total, "resisted": resisted, "triggers": top, "foods": food_top, "hours": critical_hours(conn)}

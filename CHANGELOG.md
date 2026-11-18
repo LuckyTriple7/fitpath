@@ -6,6 +6,12 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+### Hinzugefügt
+- Heißhunger-SOS mit Lieber-Tausch: „Worauf hast du Lust?“ (Schokolade, Chips, Eis, Gummibärchen, Kekse, Cola/Limo) zeigt günstigere Alternativen mit Punkten aus dem BLS. Antippen erfasst den Tausch als Snack und zählt den Heißhunger als überstanden; oft gewählte Tausche rutschen nach oben.
+- „Bewusst genießen“: kleine Menge des Originals mit Hinweis, ob sie heute noch ins Budget passt.
+- „Doch gegessen“ öffnet das Erfassen gleich mit passender Suche (z. B. Schokolade).
+- Statistik: Heißhunger je Gelüst, wie oft getauscht und welcher Tausch am liebsten.
+
 ## [0.7.1] – 2026-11-18
 
 ### Behoben

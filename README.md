@@ -75,7 +75,8 @@ git push --follow-tags            # GitHub testet, prüft Tag = Version, baut da
 | Per Text (KI) | ✨ im Erfassen-Blatt: „2 Brötchen mit Butter und Gouda, Kaffee mit Milch“ → KI zerlegt in Lebensmittel mit Menge, FitPath schlägt je Posten 5 Treffer aus der eigenen DB vor; Auswahl, Gramm und Mahlzeit änderbar, erfasst wird erst nach Bestätigung |
 | Gewicht | Trendgewicht (geglättet), Tempo kg/Woche, Ziel mit Meilensteinen (−5 %, −10 %), BMI mit WHO-Skala, Verlauf und BMI beim Zielgewicht, Verlauf 30/90/365 Tage, Körperfett und Bauchumfang |
 | Motivation | Level und Erfahrungspunkte, 16 Abzeichen (Tage in Folge, Tage im Budget, Schrittziel, −2/−5/−10 %, Zielgewicht …), Wochen-Challenge mit automatischer Zählung und „Andere“, Konfetti bei neuem Abzeichen, Level oder geschaffter Challenge; Übersicht unter **Erfolge** (Mehr → Wenn-Dann-Pläne → 🏅 oder Level-Karte auf Heute) |
-| Heißhunger-SOS | Knopf **🍫 SOS** oben: Auslöser wählen, Stärke, eigener Wenn-Dann-Plan, 10-Minuten-Timer mit Tipps, „Geschafft“ (+15 XP), „Doch gegessen“ (öffnet das Erfassen) oder „Abbrechen“ (nichts gespeichert); Pläne und Auslöser unter **Mehr → Wenn-Dann-Pläne** |
+| Heißhunger-SOS | Knopf **🍫 SOS** oben: Auslöser wählen, Stärke, eigener Wenn-Dann-Plan, 10-Minuten-Timer mit Tipps, „Geschafft“ (+15 XP), „Doch gegessen“ (öffnet das Erfassen mit passender Suche) oder „Abbrechen“ (nichts gespeichert); Pläne und Auslöser unter **Mehr → Wenn-Dann-Pläne** |
+| Lieber-Tausch | Im SOS „Worauf hast du Lust?“ (Schokolade, Chips, Eis, Gummibärchen, Kekse, Cola/Limo): 3–4 günstigere Alternativen mit Punkten aus dem BLS, z. B. bei Schokolade Bitterschokolade, Schoko-Quark, heißer Kakao oder Banane mit Kakao. Antippen erfasst den Tausch als Snack und zählt als überstanden (+15 XP); oft gewählte stehen oben. Dazu „Bewusst genießen“: kleine Menge des Originals mit Hinweis, ob sie heute ins Budget passt. Die Liste steht in `app/swaps.py` |
 | Statistik | Punkte oder kcal pro Tag gegen Budget, Tage im Budget, Ø Eiweiß/Ballaststoffe mit Richtwert, Energiedichte-Ampel, Heißhunger (überstanden, Auslöser, typische Uhrzeiten), größte Punkte-Lieferanten, Schritte |
 | Health Connect | Webhook für Life Dashboard Companion: Schritte (Tagessummen), Gewicht, Körperfett, Löschungen, Verlauf nachladen |
 | Push | Wiegen (Wochentage wählbar), „noch nichts erfasst“ am Mittag, etwa 15 Minuten vor typischen Snack-Uhrzeiten (gelernt aus Snack-Einträgen und Heißhunger der letzten 3 Wochen, ab 3 Tagen je Stunde), Abend-Check; Ruhezeiten und Höchstzahl pro Tag |
@@ -181,6 +182,7 @@ Uhrzeiten und Zahlen gibt die App unabhängig von der Browsersprache ein: Uhrzei
 | `app/body.py` | Trendgewicht, Tempo, Meilensteine |
 | `app/recipe_import.py` | Rezept-Link: Abruf, schema.org-Daten, Zutaten in Gramm und Zuordnung |
 | `app/motivation.py` | XP, Level, Abzeichen, Wochen-Challenge, Heißhunger-Auswertung, Snack-Uhrzeiten |
+| `app/swaps.py` | Lieber-Tausch: Alternativen je Gelüst (BLS-Codes), Reihenfolge nach Nutzung |
 | `app/ingest.py` | Health-Connect-Webhook, Koppel-Link, Diagnose |
 | `app/ai.py` | Erfassen per Text über LiteLLM |
 | `app/push.py` | VAPID (erzeugt beim ersten Start), Erinnerungen alle 5 Minuten |
