@@ -6,6 +6,8 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+## [0.5.0] – 2026-11-18
+
 ### Geändert
 - KI-Anbindung an jeden OpenAI-kompatiblen Endpunkt (LiteLLM, OpenRouter, OpenAI, Ollama …): neue Variablen `FITPATH_AI_URL`, `FITPATH_AI_KEY`, `FITPATH_AI_MODEL`, `FITPATH_AI_HEADERS`; Adresse mit oder ohne `/v1`. Die alten `FITPATH_LITELLM_…`-Namen gelten weiter.
 
