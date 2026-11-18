@@ -6,6 +6,8 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+## [0.5.1] – 2026-11-18
+
 ### Hinzugefügt
 - Anleitung „Einrichten mit Dockge“ im README, Variante mit benanntem Volume in `compose.yml`.
 - Klare Meldung beim Start, wenn der Datenordner nicht beschreibbar ist (statt „unable to open database file“), mit der Lösung.
