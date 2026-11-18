@@ -6,6 +6,9 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+### Geändert
+- Repo und Image sind öffentlich (MIT-Lizenz); `docker login` ist nicht mehr nötig.
+
 ## [0.5.0] – 2026-11-18
 
 ### Geändert

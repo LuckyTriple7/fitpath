@@ -1,7 +1,7 @@
 services:
 
   fitpath:
-    # Fertiges Image aus GitHub Actions (privat: vorher einmal docker login ghcr.io)
+    # Fertiges Image aus GitHub Actions (öffentlich, :latest = neuestes Release)
     image: ghcr.io/luckytriple7/fitpath:latest
     container_name: fitpath
     restart: unless-stopped

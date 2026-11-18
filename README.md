@@ -5,13 +5,9 @@ Persönliche Abnehm-App als PWA für eine Person, selbst gehostet mit Docker (Sc
 
 ## Installation
 
-Voraussetzungen: Docker mit Compose, eine Domain mit HTTPS über einen Reverse Proxy (PWA, Kamera, Push und der Health-Connect-Webhook brauchen HTTPS), Zugriff auf das private Image.
+Voraussetzungen: Docker mit Compose (mit `${A:-${B}}` in der `compose.yml`, also ein aktuelles Compose v2), eine Domain mit HTTPS über einen Reverse Proxy (PWA, Kamera, Push und der Health-Connect-Webhook brauchen HTTPS).
 
 ```bash
-# einmalig: am privaten Image-Speicher anmelden
-# (GitHub → Settings → Developer settings → Personal access tokens (classic), nur Recht read:packages)
-docker login ghcr.io -u <github-benutzer>
-
 mkdir -p /opt/docker/stacks/fitpath && cd /opt/docker/stacks/fitpath
 # compose.yml und .env.example aus diesem Repo hierher kopieren
 cp .env.example .env            # FITPATH_PUBLIC_URL anpassen, KI-Key optional
@@ -174,3 +170,7 @@ Wiederherstellen: Container stoppen, gewünschte Kopie nach `data/fitpath.db` ko
 ## Hinweis
 
 FitPath ersetzt keine ärztliche Beratung. Die Untergrenzen beim kcal-Ziel und beim Tempo sind bewusst fest eingebaut.
+
+## Lizenz
+
+MIT, siehe [LICENSE](LICENSE). Die Nährwerte stammen aus dem Bundeslebensmittelschlüssel 4.0 (Max Rubner-Institut, CC BY 4.0, Quellenangabe in der App unter **Mehr → Quellen**), Markenprodukte aus Open Food Facts (ODbL).

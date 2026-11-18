@@ -78,4 +78,9 @@ jobs:
         run: |
           v=${GITHUB_REF_NAME#v}
           awk -v v="$v" '/^## \[/{f = index($0, "[" v "]") > 0; next} f' CHANGELOG.md > notes.md
-          gh release create "$GITHUB_REF_NAME" --title "FitPath $v" --notes-file notes.md
+          # erneut hochgeladener Tag: vorhandenes Release nur aktualisieren
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release edit "$GITHUB_REF_NAME" --title "FitPath $v" --notes-file notes.md
+          else
+            gh release create "$GITHUB_REF_NAME" --title "FitPath $v" --notes-file notes.md
+          fi
