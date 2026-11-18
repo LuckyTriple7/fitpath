@@ -92,23 +92,53 @@ def ensure_seed(conn) -> int:
 # fast so viel wie ein exaktes Wort, ein Treffer am Wortanfang deutlich weniger.
 
 SYNONYMS = {
-    "ei": ["huhnerei"], "eier": ["huhnerei"], "nudeln": ["teigwaren"], "nudel": ["teigwaren"],
-    "pasta": ["teigwaren"], "spaghetti": ["teigwaren"], "nutella": ["nuss-nougat-creme"],
-    "cola": ["colagetrank"], "quark": ["speisequark"], "magerquark": ["speisequark magerstufe"],
+    # Schlüssel und Werte in Suchschreibweise: klein, ä→a, ö→o, ü→u, ß→ss
+    "ei": ["huhnerei"], "eier": ["huhnerei"], "nutella": ["nuss-nougat-creme"],
+    # meist gekocht gegessen: gekochte Variante zuerst
+    "nudeln": ["teigwaren eifrei gekocht"], "nudel": ["teigwaren eifrei gekocht"],
+    "pasta": ["teigwaren eifrei gekocht"], "spaghetti": ["teigwaren eifrei gekocht"],
+    "reis": ["reis poliert gekocht", "reis gekocht"], "kartoffel": ["kartoffel geschalt gekocht"],
+    "kartoffeln": ["kartoffel geschalt gekocht"], "haferbrei": ["porridge", "hafer grutze gekocht"],
+    "cola": ["colagetrank"], "fanta": ["orangenlimonade"], "limo": ["orangenlimonade", "zitronenlimonade"],
+    "sprite": ["zitronenlimonade"], "quark": ["speisequark"], "magerquark": ["speisequark magerstufe"],
+    "huttenkase": ["korniger frischkase"], "frischkase": ["frischkasezubereitung natur"],
     "hack": ["rind hackfleisch", "schwein hackfleisch"], "hackfleisch": ["rind hackfleisch", "schwein hackfleisch"],
     "rinderhack": ["rind hackfleisch"], "rinderhackfleisch": ["rind hackfleisch"], "schweinehack": ["schwein hackfleisch"],
+    "schinken": ["schwein kochschinken kochpokelware"], "kochschinken": ["schwein kochschinken kochpokelware"],
+    "hahnchenschenkel": ["hahnchen unterschenkel"], "hahnchenkeule": ["hahnchen unterschenkel"],
+    "hahnchenbrust": ["hahnchen brustfilet"], "putenbrust": ["pute brust ohne haut"],
     "zwiebel": ["speisezwiebel"], "zwiebeln": ["speisezwiebel"], "kidneybohne": ["kidneybohne reif gekocht"],
-    "kidneybohnen": ["kidneybohne reif gekocht"],"semmel": ["brotchen"], "schrippe": ["brotchen"], "weckle": ["brotchen"],
-    "mohre": ["karotte"], "mohren": ["karotte"], "karotten": ["karotte"], "paprika": ["gemusepaprika"],
+    "kidneybohnen": ["kidneybohne reif gekocht"], "erbsen": ["erbse grun"], "bohnen": ["bohne grun"],
+    "brokkoli": ["broccoli roh", "broccoli gekocht"], "pilze": ["champignon roh"], "champignons": ["champignon roh"],
+    "salat": ["kopfsalat roh", "eisbergsalat roh"], "mohre": ["karotte"], "mohren": ["karotte"],
+    "karotten": ["karotte"], "paprika": ["gemusepaprika"], "tomaten": ["tomate"],
+    "semmel": ["brotchen"], "schrippe": ["brotchen"], "weckle": ["brotchen"],
+    "brezel": ["laugengeback mit hagelsalz"], "breze": ["laugengeback mit hagelsalz"],
+    "brezn": ["laugengeback mit hagelsalz"], "brezen": ["laugengeback mit hagelsalz"],
+    "laugenbrezel": ["laugengeback mit hagelsalz"], "laugenstange": ["laugengeback mit hagelsalz"],
+    "laugenbrotchen": ["laugengeback mit hagelsalz"], "laugensemmel": ["laugengeback mit hagelsalz"],
+    "laugenweckle": ["laugengeback mit hagelsalz"],
+    "toast": ["weizentoastbrot buttertoastbrot"], "toastbrot": ["weizentoastbrot buttertoastbrot"], "weissbrot": ["weizenbrot weissbrot"],
+    "baguette": ["weizenbrot weissbrot"], "knackebrot": ["roggenvollkornknackebrot"],
+    "brotchen": ["weizenbrotchen", "roggenbrotchen"], "brot": ["roggenmischbrot", "weizenmischbrot", "vollkornbrot"],
+    "berliner": ["berliner krapfen"], "krapfen": ["berliner krapfen"], "keks": ["butterkekse"], "kekse": ["butterkekse"],
+    "waffel": ["waffeln einfache"], "waffeln": ["waffeln einfache"], "eis": ["vanilleeis", "speiseeis"],
+    "gummibarchen": ["fruchtgummi gummibonbon"], "gummibaren": ["fruchtgummi gummibonbon"], "chips": ["kartoffelchips stapelchips"],
+    "walnusse": ["walnuss"], "mandeln": ["mandel suss"], "nusse": ["haselnuss", "walnuss", "mandel suss"],
     "o-saft": ["orangensaft"], "pommes": ["pommes frites"], "milch": ["vollmilch", "milch fettarm"],
-    "haferflocken": ["hafer flocken"], "toast": ["toastbrot"], "hahnchenbrust": ["hahnchen brustfilet"],
-    "putenbrust": ["pute brustfilet"], "kartoffeln": ["kartoffel"], "tomaten": ["tomate"],
+    "kakao": ["milchmischgetrank kakao"], "cappuccino": ["cappuccino getrank milch"],
+    "haferflocken": ["hafer flocken"], "spatzle": ["eierteigwaren gekocht", "eier-frischteigwaren spatzle"],
+    "nudelsalat": ["salat aus eierteigwaren"], "sushi": ["sushi mit lachs", "sushi vegan"],
+    "burger": ["hamburger", "cheeseburger"],
     "apfelschorle": ["fruchtsaftschorle apfel"], "wasser": ["mineralwasser", "trinkwasser"],
-    "kase": ["schnittkase", "gouda", "emmentaler", "hartkase"], "brotchen": ["weizenbrotchen", "roggenbrotchen"],
-    "brot": ["roggenmischbrot", "weizenmischbrot", "vollkornbrot"], "bier": ["pils", "export hell", "weizenbier"],
-    "wein": ["rotwein trocken", "weisswein trocken"], "joghurt": ["joghurt mild"],
+    "kase": ["schnittkase", "gouda", "emmentaler", "hartkase"],
+    "bier": ["pils", "export hell", "weizenbier"], "weizen": ["hefeweizen weizenbier"],
+    "weizenbier": ["hefeweizen weizenbier"], "wein": ["rotwein trocken", "weisswein trocken"],
+    "rotwein": ["rotwein trocken"], "weisswein": ["weisswein trocken"], "schnaps": ["obstbrand", "wodka"],
+    "joghurt": ["joghurt mild"],
 }
 SYNONYM_BONUS = 25
+EXACT_BONUS = 15
 GROUP_PENALTY = {"V5": 12, "V6": 12, "U2": 12, "U4": 12, "U6": 12, "U8": 12, "R4": 8, "R5": 8}
 _UML = str.maketrans({"ä": "a", "ö": "o", "ü": "u", "ß": "ss", "é": "e", "è": "e"})
 _cache = {"sig": None, "rows": []}
@@ -128,7 +158,7 @@ def _index(conn) -> list:
             head = re.split(r"[,(]", name)[0]
             first = re.split(r"[^a-z0-9-]+", head.strip())[0] if head.strip() else ""
             rows.append((r["id"], name + " " + _norm(r["brand"]), words + _norm(r["brand"]).split(), first,
-                         r["source"], (r["code"] or "")[:2], r["fav"], r["hidden"]))
+                         r["source"], (r["code"] or "")[:2], r["fav"], r["hidden"], name.strip()))
         _cache.update(sig=sig, rows=rows)
     return _cache["rows"]
 
@@ -171,13 +201,17 @@ def search(conn, q: str, limit: int = 40) -> list:
     uses = dict(conn.execute("SELECT food_id, COUNT(*) FROM food_log WHERE food_id IS NOT NULL GROUP BY food_id")
                 .fetchall())
     scored = []
-    for fid, text, words, first, source, group, fav, hidden in _index(conn):
+    for fid, text, words, first, source, group, fav, hidden, name in _index(conn):
         if hidden:
             continue
         best = None
         for toks, bonus in variants:
             s = _score(toks, text, words, first)
-            if s is not None and (best is None or s + bonus > best):
+            if s is None:
+                continue
+            if name == " ".join(toks):      # Name ist genau das Gesuchte („Hamburger“, „Honig“, „Tofu“)
+                s += EXACT_BONUS
+            if best is None or s + bonus > best:
                 best = s + bonus
         if best is None:
             continue
@@ -250,7 +284,7 @@ PORTION_RULES = [
     (r"^karotte|^möhre", None, [("1 Karotte", 70)]),
     (r"^hühnerei.*(roh|gekocht)", None, [("1 Ei (M)", 55), ("2 Eier", 110)]),
     (r"brötchen|semmel|croissant", ("B4", "B5", "D9", "D4"), [("1 Stück", 60)]),
-    (r"brezel|laugen", None, [("1 Brezel", 80)]),
+    (r"brezel|laugen", None, [("1 Brezel", 80), ("1 Laugenstange/-brötchen", 70)]),
     (r"knäcke", None, [("1 Scheibe", 10)]),
     (r"toast", ("B3", "B8"), [("1 Scheibe Toast", 25)]),
     (r"brot", ("B1", "B2", "B3", "B6", "B7", "B8"), [("1 Scheibe", 50), ("½ Scheibe", 25)]),

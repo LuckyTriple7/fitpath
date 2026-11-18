@@ -90,7 +90,7 @@ python tools/bls_convert.py BLS_4_0_Daten_2025_DE.xlsx seed/bls40.csv.gz
 
 Danach im Container `python -m app.cli import-bls` (eigene Favoriten, Portionen und 0-Punkte-Schalter bleiben erhalten).
 
-Die Suche läuft im Speicher, nicht per Datenbank-Volltext: Deutsche Komposita tragen das Hauptwort hinten („Roggenbrot“ ist Brot, „Brotaufstrich“ nicht). Ein Treffer am Wortende des ersten Begriffs zählt deshalb fast so viel wie ein exaktes Wort. Dazu kommen Synonyme (`SYNONYMS` in `app/foods.py`, z. B. „nudeln“ → „Teigwaren“, „nutella“ → „Nuss-Nougat-Creme“), Favoriten und Häufigkeit.
+Die Suche läuft im Speicher, nicht per Datenbank-Volltext: Deutsche Komposita tragen das Hauptwort hinten („Roggenbrot“ ist Brot, „Brotaufstrich“ nicht). Ein Treffer am Wortende des ersten Begriffs zählt deshalb fast so viel wie ein exaktes Wort. Dazu kommen Synonyme (`SYNONYMS` in `app/foods.py`, z. B. „brezel“ → „Laugengebäck mit Hagelsalz“, „hüttenkäse“ → „Körniger Frischkäse“, „nudeln“ → „Teigwaren eifrei, gekocht“; bei Nudeln, Reis und Kartoffeln steht die gekochte Variante vorn), ein Bonus, wenn der Name genau dem Suchwort entspricht, Favoriten und Häufigkeit.
 
 ## Health Connect
 
