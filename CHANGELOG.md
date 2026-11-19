@@ -6,6 +6,8 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+## [0.12.0] – 2026-11-19
+
 ### Hinzugefügt
 - **Mehr → Geräte:** „Abmelden“ jetzt auch für das Gerät, an dem du gerade sitzt. Löscht Session und Push-Abo und entfernt die zwischengespeicherten Daten aus dem Browser.
 
