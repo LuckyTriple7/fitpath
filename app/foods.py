@@ -221,7 +221,7 @@ def search(conn, q: str, limit: int = 40) -> list:
         if best is None:
             continue
         best += 60 * fav + min(uses.get(fid, 0), 20) * 3
-        best += 6 if source in ("custom", "off", "recipe") else 0
+        best += 6 if source in ("custom", "off", "recipe", "eatout") else 0
         best += 3 if " roh" in text or "frisch" in text else 0
         best -= 6 if group[:1] in ("X", "Y") else 0
         best -= GROUP_PENALTY.get(group, 0)
@@ -551,7 +551,7 @@ def _recipe_values(conn, data: dict) -> dict:
         if not 0 < grams <= 20000:
             raise ValueError("Menge je Zutat 1–20000 g")
         food = get(conn, fid)
-        if not food or food.get("source") == "recipe":
+        if not food or food.get("source") in ("recipe", "eatout"):
             raise ValueError("Zutat unbekannt (Gerichte in Gerichten gehen nicht)")
         items.append((food, grams))
     if not items:

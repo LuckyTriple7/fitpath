@@ -13,7 +13,7 @@ import httpx2
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 
-from . import __version__, adaptive, ai, auth, backup, body, db, diary, foods, ingest, motivation, points, push, recipe_import, swaps
+from . import __version__, adaptive, ai, auth, eatout, backup, body, db, diary, foods, ingest, motivation, points, push, recipe_import, swaps
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 MAX_INGEST_BYTES = 12 * 1024 * 1024
@@ -28,6 +28,7 @@ async def lifespan(app):
     db.init()
     with db.connect() as conn:
         foods.ensure_seed(conn)
+        eatout.sync(conn)
     push.ensure_vapid()
     tasks = [asyncio.create_task(push.loop()), asyncio.create_task(backup.loop())]
     yield
@@ -318,7 +319,8 @@ def food_search(q: str = "", device=Depends(auth.require)):
 @app.get("/api/foods/lists")
 def food_lists(device=Depends(auth.require)):
     with db.connect() as conn:
-        return {"recent": foods.recent(conn, 30), "favorites": foods.favorites(conn), "custom": foods.custom(conn)}
+        return {"recent": foods.recent(conn, 30), "favorites": foods.favorites(conn), "custom": foods.custom(conn),
+                "eatout": eatout.plates(conn)}
 
 
 @app.get("/api/foods/barcode/{code}")
@@ -331,6 +333,8 @@ def food_barcode(code: str, device=Depends(auth.require)):
 def food_get(food_id: int, device=Depends(auth.require)):
     with db.connect() as conn:
         f = foods.get(conn, food_id)
+        if f and f["source"] == "eatout":
+            f["eatout"] = eatout.recipe_of(conn, food_id)      # Zusammensetzung für die Anzeige
     if not f:
         raise HTTPException(404, "unbekannt")
     return f

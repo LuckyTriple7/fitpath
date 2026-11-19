@@ -16,7 +16,6 @@ Doku: [README.md](README.md)
 - Wochenrückblick als Obsidian-Notiz.
 
 ### Ideen
-- Auswärts essen: Bereich „Auswärts“ mit fertigen Tellern in typischen Restaurant-Größen (Gyros-Teller mit Tsatsiki und Pommes, Schnitzel mit Pommes, Döner, Currywurst, Pizza …), zusammengesetzt aus BLS-Bausteinen, mit Größe klein/normal/groß und Hinweis, dass Restaurant-Portionen oft fetter sind. Offene Datenbanken mit Restaurant-Gerichten gibt es kaum (WW-Punkte proprietär, fddb ohne freie Lizenz, Open Food Facts fast nur Verpacktes).
 - Wasser trinken zählen.
 - Receive/Writeback von Life Dashboard: Gewicht aus FitPath nach Health Connect zurückschreiben.
 
@@ -36,4 +35,5 @@ Commit-Angaben bis 18.11.2026 beziehen sich auf das frühere Sammel-Repo, aus de
 - **19.11.2026** Sicherheitsaudit umgesetzt: Webhook gegen DoS, 400 statt 500 bei kaputten Eingaben, Rezept-Import gegen DNS-Rebinding, Kopplungs-Limits je IP mit Netz-Hinweis, atomare Einmal-Links (0.11.1, 0.11.2), Session-Ablauf nach 180 Tagen und „Abmelden“ fürs aktuelle Gerät (0.12.0), Abhängigkeiten mit bekannten Lücken aktualisiert, Lieferkette gepinnt, pip-audit und Dependabot (0.12.2)
 - **19.11.2026** Gewichtskarte auf „Heute“ zeigt auch den Wert der Waage (0.12.1)
 - **19.11.2026** Python 3.15, `httpx2` statt `httpx`, CI testet mit der Python-Version des Images (0.13.0)
-- **19.11.2026** Echter Bedarf: Verbrauch aus Einträgen und Gewicht, Vorschlag zur Korrektur des Budgets
+- **19.11.2026** Echter Bedarf: Verbrauch aus Einträgen und Gewicht, Vorschlag zur Korrektur des Budgets (0.14.0)
+- **19.11.2026** Auswärts essen: 38 Restaurant-Teller aus BLS-Bausteinen mit Größe klein/normal/groß und Fettzuschlag

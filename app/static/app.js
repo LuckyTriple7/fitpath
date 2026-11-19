@@ -798,7 +798,7 @@ function openAdd(meal, query = "") {
     const curMeal = () => chipVal(root, "meal") || meal;
     bindChips(root);
     const showLists = async () => {
-      $("#add-tabs", root).innerHTML = `<div class="tabs">${[["recent", "Zuletzt"], ["favorites", "Favoriten"], ["custom", "Eigene"]]
+      $("#add-tabs", root).innerHTML = `<div class="tabs">${[["recent", "Zuletzt"], ["favorites", "Favoriten"], ["custom", "Eigene"], ["eatout", "🍽️ Auswärts"]]
         .map(([k, l]) => `<button data-t="${k}" class="${addTab === k ? "on" : ""}">${l}</button>`).join("")}</div>`;
       $$("[data-t]", root).forEach(b => (b.onclick = () => { addTab = b.dataset.t; showLists(); }));
       if (!lists) {
@@ -806,6 +806,7 @@ function openAdd(meal, query = "") {
         try { lists = await api("/api/foods/lists"); } catch (_) { res.innerHTML = `<div class="empty">Offline – Suche geht nur mit Verbindung.</div>`; return; }
       }
       const items = lists[addTab] || [];
+      if (addTab === "eatout") { res.innerHTML = eatoutList(items); return; }
       res.innerHTML = items.length ? foodList(items) : `<div class="empty">${addTab === "recent" ? "Noch nichts gegessen – such oben nach einem Lebensmittel." :
         addTab === "favorites" ? "Noch keine Favoriten. Tipp beim Erfassen auf ☆." : "Noch keine eigenen Lebensmittel oder gescannten Produkte."}</div>`;
     };
@@ -823,7 +824,7 @@ function openAdd(meal, query = "") {
     q.oninput = () => { clearTimeout(timer); timer = setTimeout(runSearch, 180); };
     res.onclick = async e => {
       const li = e.target.closest("[data-food]"); if (!li) return;
-      const all = [...(lists ? [...lists.recent, ...lists.favorites, ...lists.custom] : [])];
+      const all = [...(lists ? [...lists.recent, ...lists.favorites, ...lists.custom, ...(lists.eatout || [])] : [])];
       let food = all.find(f => f.id === +li.dataset.food) || (res._hits || []).find(f => f.id === +li.dataset.food);
       if (!food) { try { food = await api(`/api/foods/${li.dataset.food}`); } catch (err) { return toast(err.message); } }
       openAmount(food, curMeal());
@@ -837,9 +838,23 @@ function openAdd(meal, query = "") {
   }, true);
 }
 
+/* Auswärts: Teller nach Gruppe, mit kcal und Punkten der normalen Größe */
+function eatoutList(items) {
+  if (!items.length) return `<div class="empty">Keine Teller vorhanden.</div>`;
+  const P = isPoints();
+  let html = "", group = null;
+  for (const f of items) {
+    if (f.group !== group) { if (group !== null) html += "</ul>"; group = f.group; html += `<h3 class="muted" style="margin:12px 0 4px">${esc(group)}</h3><ul class="list">`; }
+    html += `<li class="tap" data-food="${f.id}"><span class="dot ${f.ampel}"></span>
+      <div class="bd"><b>${f.fav ? "★ " : ""}${esc(f.name)}</b><div class="meta">normal ${num.format(f.normal_g)} g · ${num.format(f.normal_kcal)} kcal</div></div>
+      <span class="val">${P ? `${f.normal_points} P` : `${num.format(f.normal_kcal)} kcal`}</span></li>`;
+  }
+  return html + `</ul><p class="note">Aus BLS-Bausteinen zusammengesetzt, Pfannengerichte mit Fettzuschlag. Echte Portionen schwanken stark.</p>`;
+}
+
 function foodList(items) {
   return `<ul class="list">${items.map(f => `<li class="tap" data-food="${f.id}"><span class="dot ${f.ampel}"></span>
-    <div class="bd"><b>${f.fav ? "★ " : ""}${esc(f.name)}</b><div class="meta">${f.brand ? esc(f.brand) + " · " : ""}${Math.round(f.kcal || 0)} kcal/100 g${f.source === "off" ? " · 📦" : f.source === "custom" ? " · ✏️" : f.source === "recipe" ? " · 🍲 Gericht" : ""}</div></div>
+    <div class="bd"><b>${f.fav ? "★ " : ""}${esc(f.name)}</b><div class="meta">${f.brand ? esc(f.brand) + " · " : ""}${Math.round(f.kcal || 0)} kcal/100 g${f.source === "off" ? " · 📦" : f.source === "custom" ? " · ✏️" : f.source === "recipe" ? " · 🍲 Gericht" : f.source === "eatout" ? " · 🍽️" : ""}</div></div>
     <span class="val">${f.zero ? `<span class="zero">0 P</span>` : isPoints() ? `${f.points_100} P` : ""}<div class="meta" style="font-weight:400">${f.last_grams ? fmtG(f.last_grams) : "je 100 g"}</div></span></li>`).join("")}</ul>`;
 }
 
@@ -847,13 +862,14 @@ function foodList(items) {
 
 function openAmount(food, meal, entry = null) {
   const portions = [...(food.portions || [])];
-  let grams = entry ? entry.grams : (food.last_grams || (portions[0] ? portions[0].g : 100));
-  let portion = entry ? entry.portion : (food.last_grams ? food.last_portion : (portions[0] ? portions[0].name : null));
+  const def = portions[food.source === "eatout" && portions[1] ? 1 : 0];   // Teller: „normal“ statt „klein“
+  let grams = entry ? entry.grams : (food.last_grams || (def ? def.g : 100));
+  let portion = entry ? entry.portion : (food.last_grams ? food.last_portion : (def ? def.name : null));
   let count = 1;
   const multi = portion && /^(\d+)× (.+)$/.exec(portion);
   if (multi) { count = +multi[1]; portion = multi[2]; }
   if (portion && !portions.some(p => p.name === portion)) portion = null;
-  const src = { bls: "BLS 4.0", off: "Open Food Facts", custom: "Eigenes", recipe: "Gericht" }[food.source] || "";
+  const src = { bls: "BLS 4.0", off: "Open Food Facts", custom: "Eigenes", recipe: "Gericht", eatout: "🍽️ Auswärts" }[food.source] || "";
 
   openSheet(`<div class="spread"><h2 style="margin:0">${esc(food.name)}</h2>
       <button class="btn icon small-icon" id="fav" aria-label="Favorit">${food.fav ? "★" : "☆"}</button></div>
@@ -869,15 +885,26 @@ function openAmount(food, meal, entry = null) {
       <span class="muted">g</span></div>
     ${chipGroup("meal", MEALS.map(([k, l, i]) => [k, `${i} ${l}`]), entry ? entry.meal : meal, false, "scroll mt")}
     <div class="why" id="why"></div>
+    ${food.source === "eatout" ? `<p class="note">Restaurant-Portionen sind oft größer und fetter als gedacht. Im Zweifel die größere Portion nehmen.</p>` : ""}
     <div class="row nowrap mt">${entry ? `<button class="btn danger" id="del">Löschen</button>` : ""}<button class="btn primary grow" id="save">${entry ? "Speichern" : "Erfassen"}</button></div>
     <details class="more mt"><summary>Mehr zu diesem Lebensmittel</summary>
       <label class="switch"><span>Zählt 0 Punkte</span><input type="checkbox" id="zero" ${food.zero ? "checked" : ""}></label>
       <div class="row nowrap"><input type="text" id="pname" placeholder="Eigene Portion, z. B. „Mein Becher“" class="grow"><button class="btn small" id="psave">Portion merken</button></div>
       ${food.source === "custom" || food.source === "off" ? `<button class="btn block mt" id="edit">Nährwerte bearbeiten</button>` : ""}
       ${food.source === "recipe" ? `<button class="btn block mt" id="edit-recipe">🍲 Gericht bearbeiten</button>` : ""}
+      ${food.source === "eatout" ? `<div id="eatout-parts" class="mt"></div>` : ""}
       <p class="note">Je 100 g: ${Math.round(food.kcal || 0)} kcal · Eiweiß ${num1.format(food.protein || 0)} g · Fett ${num1.format(food.fat || 0)} g (ges. ${num1.format(food.satfat || 0)} g) · KH ${num1.format(food.carbs || 0)} g · Zucker ${num1.format(food.sugar || 0)} g · Ballaststoffe ${num1.format(food.fiber || 0)} g${food.alcohol ? ` · Alkohol ${num1.format(food.alcohol)} g` : ""}${food.code && food.source === "bls" ? ` · BLS ${esc(food.code)}` : ""}</p>
     </details>`, root => {
     const gi = $("#grams", root);
+    if (food.source === "eatout") {
+      // Zusammensetzung der normalen Größe nachladen (steht nicht in den Listen)
+      api(`/api/foods/${food.id}`).then(f => {
+        const r = f.eatout, el = $("#eatout-parts", root);
+        if (!r || !el) return;
+        el.innerHTML = `<small class="muted">So setzt sich „normal“ (${num.format(r.total_g)} g) zusammen:</small><ul class="list">${r.items.map(it =>
+          `<li><div class="bd"><b>${it.fat_extra ? "Fettzuschlag (Restaurant): " : ""}${esc(it.name)}</b></div><span class="val">${num.format(it.grams)} g</span></li>`).join("")}</ul>`;
+      }).catch(() => {});
+    }
     const markPortion = () => $$("#portions .chip", root).forEach(c => c.classList.toggle("on",
       c.dataset.p === "g" ? !portion : portions[+c.dataset.p] && portions[+c.dataset.p].name === portion));
     const update = () => {
@@ -1011,7 +1038,7 @@ function openRecipe(rec, meal) {
         const term = $("#r-q", root).value.trim(), my = ++seq;
         if (!term) { $("#r-hits", root).innerHTML = ""; return; }
         try {
-          const hits = (await api(`/api/foods/search?q=${encodeURIComponent(term)}`)).filter(h => h.source !== "recipe").slice(0, 8);
+          const hits = (await api(`/api/foods/search?q=${encodeURIComponent(term)}`)).filter(h => h.source !== "recipe" && h.source !== "eatout").slice(0, 8);
           if (my !== seq) return;
           hits.forEach(h => (cache[h.id] = h));
           $("#r-hits", root).innerHTML = hits.length ? foodList(hits) : `<div class="empty">Nichts gefunden.</div>`;
@@ -1099,7 +1126,7 @@ function openRecipeImport(prop, meal) {
       const b = e.target.closest("[data-find]"); if (!b) return;
       const it = items[+b.dataset.find];
       const term = (prompt("Suchbegriff für diese Zutat:", it.search) || "").trim(); if (!term) return;
-      try { it.candidates = (await api(`/api/foods/search?q=${encodeURIComponent(term)}`)).filter(h => h.source !== "recipe").slice(0, 5); }
+      try { it.candidates = (await api(`/api/foods/search?q=${encodeURIComponent(term)}`)).filter(h => h.source !== "recipe" && h.source !== "eatout").slice(0, 5); }
       catch (err) { return toast(err.message); }
       it.search = term; it.pick = 0; it.use = it.candidates.length > 0; draw();
     });
