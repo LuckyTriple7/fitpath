@@ -6,6 +6,8 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+## [0.13.0] – 2026-11-19
+
 ### Geändert
 - Python 3.15 statt 3.13 im Image (Basisimage `python:3.15-slim`, per Digest gepinnt).
 - HTTP-Client `httpx` durch `httpx2` ersetzt. Das ist die von Pydantic gepflegte Fortführung, `httpx` bekam seit Dezember 2024 kein stabiles Release mehr. Die API ist gleich, Starlette empfiehlt `httpx2` bereits.
