@@ -796,7 +796,7 @@ def pair_start(request: Request):
     if request.headers.get("x-fitpath") != "1":
         raise HTTPException(403, "Header fehlt")
     with db.connect() as conn:
-        r = auth.pair_start(conn, request.headers.get("user-agent", ""))
+        r = auth.pair_start(conn, request.headers.get("user-agent", ""), auth.client_ip(request))
     if not r:
         raise HTTPException(429, "Gerade zu viele Anfragen – in einer Minute nochmal")
     import segno
@@ -817,9 +817,9 @@ async def pair_poll(request: Request, response: Response):
 
 
 @app.get("/api/pair/{code}")
-def pair_info(code: str, device=Depends(auth.require)):
+def pair_info(code: str, request: Request, device=Depends(auth.require)):
     with db.connect() as conn:
-        info = auth.pair_info(conn, code)
+        info = auth.pair_info(conn, code, auth.client_ip(request))
     if not info:
         raise HTTPException(404, "Code unbekannt oder abgelaufen")
     return info

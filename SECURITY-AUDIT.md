@@ -167,18 +167,19 @@ KI-Fehler werden inklusive Antworttext geloggt; der Service Worker cached `/` un
 
 ---
 
-## Stand der Umsetzung (19.11.2026, nach v0.11.0)
+## Stand der Umsetzung (19.11.2026)
 
 | ID | Stand |
 |---|---|
 | M1 | **behoben:** Body mit hartem Limit als Stream (auch chunked), 429 nach 20 Ablehnungen pro Minute vor dem Lesen, höchstens 2 parallele Uploads, Ablehnungen höchstens einmal pro Minute im Protokoll |
 | M2 | **akzeptiert:** Server wird nur vom Betreiber genutzt. Neu bewerten, wenn Backups den Server verlassen |
 | M3 | **akzeptiert:** NPMPlus übernimmt HTTPS und HSTS. Voraussetzung: HSTS am Proxy-Host aktiv, `COOKIE_SECURE` bleibt `true`, `PUBLIC_URL` mit `https://` |
-| M4 | **teilweise:** `is_global` statt Einzelprüfungen (sperrt CGNAT), ungültige Adressen abgefangen. DNS-Rebinding bleibt offen. Hinweis: Eine IPv6-Zonen-ID führt unter Python ≥ 3.9 nicht zum `ValueError`, `ip_address()` versteht sie |
+| M4 | **behoben:** `is_global` statt Einzelprüfungen (sperrt CGNAT), ungültige Adressen abgefangen (v0.11.1). Verbindung direkt zur geprüften IP mit Host-Header und `sni_hostname`, kein zweites Auflösen mehr (v0.11.2). Hinweis: Eine IPv6-Zonen-ID führt unter Python ≥ 3.9 nicht zum `ValueError`, `ip_address()` versteht sie |
 | N2 | **behoben:** `DELETE … RETURNING` |
 | N4 | **behoben:** `compare_digest` über Bytes, ungültige `Content-Length` → 400 |
 | N5 | **behoben:** alle JSON-Endpunkte über `_json()` (Limit, Typprüfung), Feldfehler → 400 |
-| N1, N3, N6–N9 | offen |
+| N1 | **behoben:** Limits je IP (5/min, 3 offen) zusätzlich zu den globalen (60/min, 100 offen). Client-IP aus `X-Forwarded-For`/`X-Real-IP` nur bei Verbindung aus privatem Netz. Freigabedialog zeigt „selbes Netz“ oder die fremde Adresse mit Warnung (v0.11.2). Restrisiko: Wer aus demselben Netz kommt oder den Nutzer überredet, trotz Warnung zuzulassen |
+| N3, N6–N9 | offen |
 
 ### Nachtrag v0.10.0: Foto-Endpunkt `/api/ai/label`
 

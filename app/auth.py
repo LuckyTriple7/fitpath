@@ -15,6 +15,7 @@ nur SHA-256-Hashes.
 """
 
 import hashlib
+import ipaddress
 import os
 import re
 import secrets
@@ -32,8 +33,10 @@ COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "true").lower() != "false"
 PUBLIC_URL = os.environ.get("PUBLIC_URL", "http://localhost:8080").rstrip("/")
 LINK_MINUTES = 15
 PAIR_SECONDS = 300          # so lange gilt ein Code, danach holt das neue Gerät einen neuen
-PAIR_MAX_PENDING = 30       # offene Anfragen insgesamt
-PAIR_PER_MINUTE = 20        # neue Anfragen pro Minute (ohne Anmeldung erreichbar)
+PAIR_MAX_PENDING = 100      # offene Anfragen insgesamt (Schutz der DB)
+PAIR_PER_MINUTE = 60        # neue Anfragen pro Minute insgesamt (ohne Anmeldung erreichbar)
+PAIR_MAX_PENDING_IP = 3     # offene Anfragen je IP
+PAIR_PER_MINUTE_IP = 5      # neue Anfragen pro Minute je IP – ein Angreifer sperrt so nicht alle anderen aus
 
 
 def _hash(token: str) -> str:
@@ -95,20 +98,47 @@ def ua_label(ua: str) -> str:
     return f"{_device_name(ua)} · {browser}" if browser else _device_name(ua)
 
 
+def _ip(v):
+    try:
+        return ipaddress.ip_address(str(v or "").strip())
+    except ValueError:
+        return None
+
+
+def client_ip(request: Request) -> str:
+    """Adresse des Aufrufers. X-Forwarded-For/X-Real-IP zählen nur, wenn die Verbindung aus einem
+    privaten Netz kommt (Reverse Proxy wie NPMPlus); direkt aus dem Internet wären sie fälschbar."""
+    peer = request.client.host if request.client else ""
+    ip = _ip(peer)
+    if ip and (ip.is_private or ip.is_loopback):
+        # rechter Eintrag = vom eigenen Proxy angehängt; weiter links kann der Client Beliebiges schreiben
+        fwd = (request.headers.get("x-forwarded-for") or "").split(",")[-1]
+        real = _ip(fwd) or _ip(request.headers.get("x-real-ip"))
+        if real:
+            return str(real)
+    return peer
+
+
 # ---------- Kopplung per QR-Code/Code ----------
 
 _pair_lock = threading.Lock()
-_pair_calls: list = []
+_pair_calls: dict = {}      # IP (und "*" für alle) → Zeitpunkte der letzten Minute
 
 
-def _pair_allowed() -> bool:
+def _pair_allowed(ip: str) -> bool:
     with _pair_lock:
         now = time.monotonic()
-        while _pair_calls and now - _pair_calls[0] > 60:
-            _pair_calls.pop(0)
-        if len(_pair_calls) >= PAIR_PER_MINUTE:
+        for key in list(_pair_calls):
+            calls = _pair_calls[key]
+            while calls and now - calls[0] > 60:
+                calls.pop(0)
+            if not calls:
+                del _pair_calls[key]
+        mine, total = _pair_calls.get(ip, []), _pair_calls.get("*", [])
+        if len(mine) >= PAIR_PER_MINUTE_IP or len(total) >= PAIR_PER_MINUTE:
             return False
-        _pair_calls.append(now)
+        _pair_calls.setdefault(ip, []).append(now)
+        _pair_calls.setdefault("*", []).append(now)
         return True
 
 
@@ -116,11 +146,13 @@ def _pair_cleanup(conn) -> None:
     conn.execute("DELETE FROM pair_requests WHERE expires < ?", (db.iso(db.now_utc()),))
 
 
-def pair_start(conn, user_agent: str) -> dict | None:
+def pair_start(conn, user_agent: str, ip: str = "") -> dict | None:
     """Neue Anfrage. None, wenn gerade zu viele offen sind."""
     _pair_cleanup(conn)
-    if not _pair_allowed() or conn.execute(
-            "SELECT COUNT(*) FROM pair_requests WHERE status = 'pending'").fetchone()[0] >= PAIR_MAX_PENDING:
+    if not _pair_allowed(ip):
+        return None
+    pending = conn.execute("SELECT COUNT(*), SUM(ip = ?) FROM pair_requests WHERE status = 'pending'", (ip,)).fetchone()
+    if pending[0] >= PAIR_MAX_PENDING or (pending[1] or 0) >= PAIR_MAX_PENDING_IP:
         return None
     active = {r[0] for r in conn.execute("SELECT code FROM pair_requests")}
     code = f"{secrets.randbelow(1_000_000):06d}"
@@ -128,8 +160,9 @@ def pair_start(conn, user_agent: str) -> dict | None:
         code = f"{secrets.randbelow(1_000_000):06d}"
     rid = secrets.token_urlsafe(32)
     now = db.now_utc()
-    conn.execute("INSERT INTO pair_requests (rid_hash, code, expires, ua, created) VALUES (?, ?, ?, ?, ?)",
-                 (_hash(rid), code, db.iso(now + timedelta(seconds=PAIR_SECONDS)), (user_agent or "")[:300], db.iso(now)))
+    conn.execute("INSERT INTO pair_requests (rid_hash, code, expires, ua, created, ip) VALUES (?, ?, ?, ?, ?, ?)",
+                 (_hash(rid), code, db.iso(now + timedelta(seconds=PAIR_SECONDS)), (user_agent or "")[:300], db.iso(now),
+                  ip[:45]))
     return {"rid": rid, "code": code, "seconds": PAIR_SECONDS}
 
 
@@ -140,12 +173,14 @@ def _pending(conn, code: str):
     return conn.execute("SELECT * FROM pair_requests WHERE code = ? AND status = 'pending'", (code,)).fetchone()
 
 
-def pair_info(conn, code: str) -> dict | None:
+def pair_info(conn, code: str, viewer_ip: str = "") -> dict | None:
     row = _pending(conn, code)
     if not row:
         return None
     age = (db.now_utc() - db.parse(row["created"])).total_seconds()
-    return {"code": code, "label": ua_label(row["ua"]), "name": _device_name(row["ua"]), "age_s": int(age)}
+    # Gegen Code-Phishing: zeigen, ob die Anfrage aus demselben Netz kommt wie das freigebende Gerät
+    return {"code": code, "label": ua_label(row["ua"]), "name": _device_name(row["ua"]), "age_s": int(age),
+            "ip": row["ip"] or "", "same_ip": bool(row["ip"]) and row["ip"] == viewer_ip}
 
 
 def pair_decide(conn, code: str, approve: bool, name: str = "") -> bool:
@@ -166,7 +201,10 @@ def pair_poll(conn, rid: str) -> tuple[str, str | None]:
         return "expired", None
     if row["status"] == "pending":
         return "pending", None
-    conn.execute("DELETE FROM pair_requests WHERE rid_hash = ?", (row["rid_hash"],))
+    # nur wer die Anfrage tatsächlich löscht, bekommt die Session (zwei parallele Polls → eine Session)
+    if not conn.execute("DELETE FROM pair_requests WHERE rid_hash = ? AND status != 'pending' RETURNING 1",
+                        (row["rid_hash"],)).fetchone():
+        return "expired", None
     if row["status"] == "denied":
         return "denied", None
     return "approved", _new_session(conn, row["name"])

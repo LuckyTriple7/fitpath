@@ -144,7 +144,10 @@ def test_pairing_limits():
     c = TestClient(main.app)
     c.__enter__()
     auth._pair_calls.clear()
-    codes = [c.post("/api/pair/start", headers=H, json={}).status_code for _ in range(auth.PAIR_PER_MINUTE + 1)]
+    with db.connect() as conn:
+        conn.execute("DELETE FROM pair_requests")
+    # je IP höchstens PAIR_MAX_PENDING_IP offene Anfragen (der TestClient hat immer dieselbe Adresse)
+    codes = [c.post("/api/pair/start", headers=H, json={}).status_code for _ in range(auth.PAIR_MAX_PENDING_IP + 1)]
     assert codes[-1] == 429 and set(codes[:-1]) == {200}
     auth._pair_calls.clear()
     with db.connect() as conn:                       # abgelaufene Anfragen werden aufgeräumt

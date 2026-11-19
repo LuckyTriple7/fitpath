@@ -1,4 +1,4 @@
-"""Befunde aus SECURITY-AUDIT.md: M1 (Webhook), N2, N4, N5, M4 (ValueError/CGNAT), Foto-Endpunkt."""
+"""Befunde aus SECURITY-AUDIT.md: M1 (Webhook), M4 (SSRF), N1 (Kopplung), N2, N4, N5, Foto-Endpunkt."""
 
 import socket
 
@@ -79,3 +79,56 @@ def test_ssrf_blocks_cgnat_and_bad_addresses(monkeypatch):
         assert recipe_import._public_host("example.org") is False, addr
     monkeypatch.setattr(socket, "getaddrinfo", fake("8.8.8.8"))
     assert recipe_import._public_host("example.org") is True
+
+
+def test_ssrf_connects_to_checked_ip(monkeypatch):
+    """DNS-Rebinding: Nach der Prüfung darf httpx nicht neu auflösen, sondern muss die geprüfte IP nehmen."""
+    import httpx
+    answers = iter(["93.184.216.34", "127.0.0.1"])        # erste Auflösung öffentlich, zweite intern
+    monkeypatch.setattr(socket, "getaddrinfo",
+                        lambda host, port: [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (next(answers), 0))])
+    seen = {}
+
+    def handler(request):
+        seen.update(host=request.url.host, header=request.headers["host"], sni=request.extensions.get("sni_hostname"))
+        return httpx.Response(200, text="<html></html>")
+
+    real = httpx.Client
+    monkeypatch.setattr(httpx, "Client", lambda **kw: real(transport=httpx.MockTransport(handler), **kw))
+    recipe_import.fetch("https://rezepte.example/kuchen")
+    assert seen == {"host": "93.184.216.34", "header": "rezepte.example", "sni": "rezepte.example"}
+
+
+class _Req:
+    def __init__(self, peer, headers):
+        self.client = type("C", (), {"host": peer})()
+        self.headers = headers
+
+
+def test_client_ip_trusts_only_private_proxy():
+    xff = {"x-forwarded-for": "6.6.6.6, 203.0.113.7"}
+    assert auth.client_ip(_Req("172.18.0.1", xff)) == "203.0.113.7"          # über NPMPlus: rechter Eintrag
+    assert auth.client_ip(_Req("172.18.0.1", {"x-real-ip": "203.0.113.8"})) == "203.0.113.8"
+    assert auth.client_ip(_Req("8.8.4.4", xff)) == "8.8.4.4"                 # direkt aus dem Internet: fälschbar
+    assert auth.client_ip(_Req("172.18.0.1", {"x-forwarded-for": "kaputt"})) == "172.18.0.1"
+
+
+def test_pairing_limit_per_ip():
+    auth._pair_calls.clear()
+    with db.connect() as conn:
+        conn.execute("DELETE FROM pair_requests")
+        for _ in range(auth.PAIR_MAX_PENDING_IP):
+            assert auth.pair_start(conn, "", "203.0.113.1")
+        assert auth.pair_start(conn, "", "203.0.113.1") is None              # Angreifer ausgebremst …
+        r = auth.pair_start(conn, "Mozilla/5.0 (Android)", "198.51.100.2")   # … andere kommen weiter durch
+        assert r
+        assert auth.pair_info(conn, r["code"], "198.51.100.2")["same_ip"] is True
+        info = auth.pair_info(conn, r["code"], "203.0.113.9")
+        assert info["same_ip"] is False and info["ip"] == "198.51.100.2"
+        conn.execute("DELETE FROM pair_requests")
+    auth._pair_calls.clear()
+    for _ in range(auth.PAIR_PER_MINUTE_IP):
+        assert auth._pair_allowed("203.0.113.3")
+    assert not auth._pair_allowed("203.0.113.3")
+    assert auth._pair_allowed("203.0.113.4")
+    auth._pair_calls.clear()

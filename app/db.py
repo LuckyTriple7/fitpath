@@ -202,6 +202,7 @@ MIGRATIONS = {
     "foods": [("recipe", "TEXT"),        # JSON {items: [{food_id, name, grams}], servings, total_g}
               ("pts_100", "REAL")],      # Rohpunkte je 100 g, nur für Gerichte (0-Punkte-Zutaten zählen nicht)
     "food_log": [("points_raw", "REAL")],  # Rohpunkte der Menge, wenn nicht aus den Nährwerten berechenbar
+    "pair_requests": [("ip", "TEXT")],  # Adresse des neuen Geräts (Limit je IP, Anzeige beim Zulassen)
     "events": [("food", "TEXT"),         # Heißhunger worauf (Schlüssel aus swaps.CRAVINGS)
                ("swap", "TEXT")],        # gewählter Lieber-Tausch oder „genuss“
 }

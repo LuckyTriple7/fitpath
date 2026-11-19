@@ -313,6 +313,9 @@ async function openPairApprove(code) {
   try { info = await api(`/api/pair/${code}`); } catch (e) { return toast(e.message); }
   openSheet(`<h2>🔗 Gerät verbinden?</h2>
     <p><b>${esc(info.label)}</b> möchte sich verbinden (Code ${code.slice(0, 3)} ${code.slice(3)}, angefragt vor ${info.age_s < 60 ? `${info.age_s} s` : `${Math.round(info.age_s / 60)} min`}).</p>
+    ${info.same_ip ? `<p class="note">Aus demselben Netz wie dieses Gerät.</p>`
+      : `<p><span class="pill warn">Andere Adresse${info.ip ? ": " + esc(info.ip) : ""}</span></p>
+         <p class="note">Das neue Gerät ist in einem anderen Netz (z. B. Mobilfunk statt WLAN). Hat dir jemand diesen Code geschickt oder vorgelesen: <b>ablehnen</b>.</p>`}
     <p class="note">Nur zulassen, wenn du das gerade selbst bist und der Code auf dem neuen Gerät genauso aussieht.</p>
     <label class="f"><span>Name des Geräts</span><input type="text" id="pair-name" value="${esc(info.name)}" maxlength="40"></label>
     <div class="row nowrap mt"><button class="btn danger grow" id="pair-no">Ablehnen</button><button class="btn primary grow" id="pair-yes">Zulassen</button></div>`, root => {

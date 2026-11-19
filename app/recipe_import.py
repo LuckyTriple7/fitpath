@@ -69,20 +69,27 @@ class ImportError_(Exception):
 
 # ---------- Abruf ----------
 
-def _public_host(host: str) -> bool:
+def _public_ip(host: str):
+    """Geprüfte öffentliche IP des Hosts oder None. Alle Adressen müssen öffentlich sein."""
     try:
         infos = socket.getaddrinfo(host, None)
-    except socket.gaierror:
-        return False
+    except (socket.gaierror, UnicodeError):
+        return None
+    ips = []
     for info in infos:
         try:
             ip = ipaddress.ip_address(info[4][0])
         except ValueError:
-            return False
+            return None
         # is_global schließt auch CGNAT (100.64.0.0/10) und andere nicht öffentliche Netze aus
         if not ip.is_global or ip.is_multicast:
-            return False
-    return True
+            return None
+        ips.append(ip)
+    return ips[0] if ips else None
+
+
+def _public_host(host: str) -> bool:
+    return _public_ip(host) is not None
 
 
 def fetch(url: str) -> tuple[str, str]:
@@ -91,11 +98,18 @@ def fetch(url: str) -> tuple[str, str]:
         u = urlparse(url)
         if u.scheme not in ("http", "https") or not u.hostname or u.port not in (None, 80, 443):
             raise ImportError_("Bitte einen normalen https-Link einfügen")
-        if not _public_host(u.hostname):
+        ip = _public_ip(u.hostname)
+        if ip is None:
             raise ImportError_("Die Adresse ist nicht öffentlich erreichbar")
+        # Direkt zur geprüften IP verbinden, sonst löst httpx neu auf und ein DNS-Rebinding
+        # könnte auf eine interne Adresse umlenken. Host-Header und TLS (SNI, Zertifikat) bleiben beim Namen.
+        host = f"[{ip}]" if ip.version == 6 else str(ip)
+        target = u._replace(netloc=host + (f":{u.port}" if u.port else "")).geturl()
+        headers = {"Host": u.netloc.rsplit("@", 1)[-1], "User-Agent": UA,
+                   "Accept-Language": "de-DE,de;q=0.9,en;q=0.5", "Accept": "text/html,application/xhtml+xml"}
+        ext = {"sni_hostname": u.hostname} if u.scheme == "https" else {}
         with httpx.Client(timeout=12, follow_redirects=False) as client:
-            with client.stream("GET", url, headers={"User-Agent": UA, "Accept-Language": "de-DE,de;q=0.9,en;q=0.5",
-                                                     "Accept": "text/html,application/xhtml+xml"}) as r:
+            with client.stream("GET", target, headers=headers, extensions=ext) as r:
                 if r.status_code in (301, 302, 303, 307, 308) and r.headers.get("location"):
                     url = urljoin(url, r.headers["location"])
                     continue
