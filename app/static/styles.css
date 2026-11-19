@@ -104,6 +104,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .btn.icon { flex: none; width: 48px; min-height: 48px; padding: 0; font-size: 1.25rem; }
 .btn.icon.small-icon { width: 38px; min-height: 38px; font-size: 1.05rem; border-radius: 10px; }
 .btn:disabled { opacity: .5; }
+/* Knöpfe nebeneinander: einzeilig, die Schrift verkleinert app.js (fitButtons) statt umzubrechen */
+.btn.fit { white-space: nowrap; overflow: hidden; }
+.row.nowrap > .btn { align-self: stretch; }     /* bricht doch einer um, bleiben die Nachbarn gleich hoch */
 .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .row.nowrap { flex-wrap: nowrap; }
 .row > .grow { flex: 1; min-width: 0; }

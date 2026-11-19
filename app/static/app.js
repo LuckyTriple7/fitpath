@@ -1843,5 +1843,34 @@ document.addEventListener("visibilitychange", async () => {
 });
 
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+
+/* Knöpfe nebeneinander bleiben gleich hoch: Passt der Text nicht in eine Zeile, wird die Schrift
+   kleiner (bis 75 %). Reicht das nicht, bricht er wie bisher um, statt abgeschnitten zu werden. */
+const FIT_SEL = ".row > .btn:not(.icon), .card-head .btn:not(.icon)";
+const FIT_MIN = 0.75;
+function fitButtons() {
+  for (const b of document.querySelectorAll(FIT_SEL)) {
+    if (!b.offsetParent) continue;                       // unsichtbar, z. B. in zugeklapptem <details>
+    b.classList.add("fit");
+    b.style.fontSize = "";
+    if (b.scrollWidth <= b.clientWidth) continue;
+    const cs = getComputedStyle(b), base = parseFloat(cs.fontSize);
+    const pad = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+    let size = Math.max(base * FIT_MIN, base * (b.clientWidth - pad) / (b.scrollWidth - pad));
+    b.style.fontSize = size + "px";
+    while (b.scrollWidth > b.clientWidth && size > base * FIT_MIN) { size = Math.max(base * FIT_MIN, size - 0.5); b.style.fontSize = size + "px"; }
+    if (b.scrollWidth > b.clientWidth) { b.classList.remove("fit"); b.style.fontSize = ""; }
+  }
+}
+let fitQueued = false;
+function queueFit() {
+  if (fitQueued) return;
+  fitQueued = true;
+  requestAnimationFrame(() => { fitQueued = false; fitButtons(); });
+}
+// Jede neu gezeichnete Ansicht oder jedes Blatt prüfen; fitButtons selbst ändert nur Attribute, löst also nichts erneut aus
+new MutationObserver(queueFit).observe(document.body, { childList: true, subtree: true });
+addEventListener("resize", queueFit);
+document.addEventListener("toggle", queueFit, true);     // <details> aufgeklappt: Knöpfe darin jetzt messbar
 setNet();
 flushQueue().finally(render);
