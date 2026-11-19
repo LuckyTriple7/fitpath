@@ -6,6 +6,8 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+## [0.11.2] – 2026-11-19
+
 ### Sicherheit
 - Rezept-Import verbindet sich direkt mit der geprüften öffentlichen IP (Host-Header und TLS-Zertifikat bleiben beim Namen). Ein DNS-Rebinding kann den Abruf nicht mehr ins Heimnetz umlenken (Audit M4).
 - Kopplung neuer Geräte: Limits gelten jetzt je IP (5 Anfragen pro Minute, 3 offene), ein Angreifer kann die Kopplung nicht mehr für alle sperren. Hinter einem Reverse Proxy (z. B. NPMPlus) zählt die Adresse aus `X-Forwarded-For`/`X-Real-IP`, aber nur, wenn die Verbindung aus einem privaten Netz kommt (Audit N1).
