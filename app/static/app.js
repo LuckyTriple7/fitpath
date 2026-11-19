@@ -506,6 +506,7 @@ function weightMiniHtml() {
   const weighDay = (S.settings.weigh_days || []).includes((new Date().getDay() + 6) % 7);
   return `<a class="card" href="#gewicht" style="display:block;text-decoration:none;color:inherit">
     <div class="card-head"><h2>⚖️ ${num1.format(b.trend)} kg</h2><small>Trend${b.rate != null ? ` · ${fmtSigned(b.rate)} kg/Woche` : ""}</small></div>
+    ${b.weight ? `<small style="display:block;margin-bottom:6px">Waage ${b.weighed_today ? "heute" : fmtDay(b.day)}: <b>${num1.format(b.weight)} kg</b></small>` : ""}
     ${b.progress != null ? `<div class="progress"><i style="width:${b.progress * 100}%"></i></div><small>${num1.format(b.lost)} kg geschafft · Ziel ${num1.format(b.goal)} kg</small>` : ""}
     ${!b.weighed_today && weighDay ? `<div class="mt"><button class="btn small primary" id="weigh-btn">Heute wiegen</button></div>` : ""}</a>`;
 }

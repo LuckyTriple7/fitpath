@@ -6,6 +6,9 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+### Behoben
+- Heute: Die Gewichtskarte zeigte nur das Trendgewicht. Das bewegt sich bewusst langsam (geglättet), deshalb sah ein neuer Wiegewert so aus, als wäre er nicht angekommen. Jetzt steht darunter auch der letzte Wert der Waage mit Datum („Waage heute: 93,8 kg“).
+
 ## [0.12.0] – 2026-11-19
 
 ### Hinzugefügt
