@@ -6,6 +6,8 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+## [0.15.1] – 2026-11-19
+
 ### Behoben
 - Knöpfe nebeneinander (z. B. „Gericht anlegen“ und „Eigenes Lebensmittel“) waren auf dem Handy unterschiedlich hoch, weil langer Text umbrach. Jetzt bleiben sie einzeilig und gleich hoch, die Schrift wird bei Bedarf kleiner (bis 75 %). Reicht das nicht, bricht der Text um, und die Knöpfe in der Zeile bleiben trotzdem gleich hoch.
 
