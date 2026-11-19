@@ -99,7 +99,8 @@ def icons(name: str):
 
 @app.get("/healthz")
 def healthz():
-    return {"ok": True, "version": __version__}
+    # ohne Version: ohne Anmeldung erreichbar, die Version sehen angemeldete Geräte in /api/state
+    return {"ok": True}
 
 
 CONFIRM_PAGE = """<!doctype html>
@@ -702,7 +703,8 @@ async def ingest_health(request: Request):
         if reason:
             ingest.log_denied(conn, reason, len(raw))
     if reason:
-        raise HTTPException(401, reason)
+        # Grund nur im Protokoll (Mehr → Health Connect), nach außen nicht verraten, ob ein Geheimnis eingerichtet ist
+        raise HTTPException(401, "nicht autorisiert")
     try:
         payload = json.loads(raw)
     except ValueError:

@@ -111,7 +111,13 @@ async def _complete(system: str, user, max_tokens: int = 700) -> str:
             json={"model": MODEL_FAST, "max_tokens": max_tokens,
                   "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]})
     if resp.status_code != 200:
-        raise RuntimeError(f"LiteLLM {resp.status_code}: {resp.text[:300]}")
+        # nur Status und Fehlertyp ins Log: der Antworttext kann die Eingabe (Essen, Foto) wiederholen
+        try:
+            err = resp.json().get("error")
+        except (ValueError, AttributeError):
+            err = None
+        kind = str(err.get("type") or err.get("code") or "")[:40] if isinstance(err, dict) else ""
+        raise RuntimeError(f"LiteLLM {resp.status_code}{f' ({kind})' if kind else ''}")
     content = resp.json()["choices"][0].get("message", {}).get("content")
     if isinstance(content, list):
         content = "".join(part.get("text", "") for part in content if isinstance(part, dict))

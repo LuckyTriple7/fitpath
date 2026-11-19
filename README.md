@@ -41,7 +41,7 @@ Updates holt der Knopf **Update** im Stack. Sicherung beim benannten Volume: die
 
 ## Update
 
-Versionen nach SemVer, Änderungen im [CHANGELOG.md](CHANGELOG.md). Die Version steht in `app/__init__.py`, in der App unter **Mehr** und in `/healthz`.
+Versionen nach SemVer, Änderungen im [CHANGELOG.md](CHANGELOG.md). Die Version steht in `app/__init__.py` und in der App neben dem Logo und unter **Mehr**.
 
 | Ereignis | Image-Tags | Gedacht für |
 |---|---|---|
@@ -206,6 +206,15 @@ Daten: `./data` im Stack-Ordner (`fitpath.db`, `vapid_private.pem`); diesen Ordn
 
 Wiederherstellen: Container stoppen, gewünschte Kopie nach `data/fitpath.db` kopieren (Eigentümer UID `10001`), `fitpath.db-wal` und `fitpath.db-shm` löschen, Container starten.
 
+
+## Sicherheit
+
+- **Eine Instanz pro Person.** Jedes verbundene Gerät hat vollen Zugriff: Geräte verwalten, Export, Health-Connect-Geheimnis neu erzeugen. Rollen oder getrennte Konten gibt es nicht. Wer FitPath zu zweit nutzen will, startet zwei Container.
+- **HTTPS macht der Reverse Proxy** (z. B. NPMPlus, Caddy). Dort auch HSTS einschalten. `COOKIE_SECURE` bleibt auf `true`, `PUBLIC_URL` beginnt mit `https://`.
+- **Daten auf dem Server** liegen unverschlüsselt in `data/` (SQLite und tägliche Sicherungen). Auf einem Server, den andere mitbenutzen, oder wenn Sicherungen den Server verlassen: Verschlüsselung auf Ebene von Platte oder Volume.
+- **Daten auf dem Gerät:** Für den Offline-Betrieb merkt sich der Browser den letzten Stand (auch Gewicht) im `localStorage`. **Abmelden** unter **Mehr → Geräte** löscht ihn.
+- **Logs** enthalten keine Eingaben: Bei KI-Fehlern stehen nur Statuscode und Fehlertyp drin.
+- Prüfbericht und Stand der Umsetzung: [SECURITY-AUDIT.md](SECURITY-AUDIT.md).
 
 ## Hinweis
 

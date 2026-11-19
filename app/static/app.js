@@ -134,6 +134,7 @@ async function loadState() {
   try {
     S = await api("/api/state" + dayParam());
     if (!dayParam()) store("fp_state", S);
+    if (S.version) $("#app-ver").textContent = "v" + S.version;
   } catch (e) {
     if (e instanceof AuthError) throw e;
     S = S || store("fp_state");
@@ -1780,7 +1781,5 @@ document.addEventListener("visibilitychange", async () => {
 });
 
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
-/* Version neben dem Logo: aus /healthz, das geht auch ohne Anmeldung */
-fetch("/healthz").then(r => r.json()).then(h => { if (h.version) $("#app-ver").textContent = "v" + h.version; }).catch(() => {});
 setNet();
 flushQueue().finally(render);

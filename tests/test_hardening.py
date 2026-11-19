@@ -1,6 +1,8 @@
 """Befunde aus SECURITY-AUDIT.md: M1 (Webhook), M4 (SSRF), N1 (Kopplung), N2, N4, N5, Foto-Endpunkt."""
 
 import socket
+
+import pytest
 from datetime import timedelta
 
 from app import ai, auth, db, ingest, main, recipe_import
@@ -163,3 +165,24 @@ def test_idle_sessions_expire():
     assert other.get("/api/state").status_code == 200
     c.__exit__(None, None, None)
     other.__exit__(None, None, None)
+
+
+def test_no_info_leak_without_login(monkeypatch):
+    import asyncio
+    import httpx
+    c = client()
+    assert "version" not in c.get("/healthz").json()
+    assert "version" in c.get("/api/state").json()
+    # KI-Fehler: der Antworttext (kann die Eingabe enthalten) landet nicht in der Meldung
+    resp = httpx.Response(400, json={"error": {"type": "invalid_request_error", "message": "Ich aß 3 Kekse"}})
+
+    class FakeClient:
+        def __init__(self, **kw): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): pass
+        async def post(self, *a, **kw): return resp
+    monkeypatch.setattr(httpx, "AsyncClient", FakeClient)
+    with pytest.raises(RuntimeError) as exc:
+        asyncio.run(ai._complete("s", "Ich aß 3 Kekse"))
+    assert str(exc.value) == "LiteLLM 400 (invalid_request_error)"
+    c.__exit__(None, None, None)

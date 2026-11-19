@@ -180,7 +180,10 @@ KI-Fehler werden inklusive Antworttext geloggt; der Service Worker cached `/` un
 | N5 | **behoben:** alle JSON-Endpunkte über `_json()` (Limit, Typprüfung), Feldfehler → 400 |
 | N1 | **behoben:** Limits je IP (5/min, 3 offen) zusätzlich zu den globalen (60/min, 100 offen). Client-IP aus `X-Forwarded-For`/`X-Real-IP` nur bei Verbindung aus privatem Netz. Freigabedialog zeigt „selbes Netz“ oder die fremde Adresse mit Warnung (v0.11.2). Restrisiko: Wer aus demselben Netz kommt oder den Nutzer überredet, trotz Warnung zuzulassen |
 | N3 | **teilweise:** Abmeldung nach 180 Tagen ohne Nutzung (`SESSION_IDLE_DAYS`), „Abmelden“ für das aktuelle Gerät (v0.12.0). Bewusst nicht: Rotation des Session-Tokens (bei einer Ein-Personen-App kaum Nutzen). Login-Token im Pfad bleibt (einmalig, 15 Minuten gültig) |
-| N6–N9 | offen |
+| N6 | **behoben:** `/healthz` ohne Version, Webhook-401 einheitlich „nicht autorisiert“ (Grund nur im Protokoll für angemeldete Geräte) (v0.12.2) |
+| N7 | **dokumentiert:** README-Abschnitt „Sicherheit“: eine Instanz pro Person (v0.12.2) |
+| N8 | **behoben:** Actions per Commit-SHA, Basisimage per Digest, `pip-audit` in der CI (auch wöchentlich), Dependabot für Actions, Docker und pip. Der erste `pip-audit`-Lauf fand 7 Lücken in Starlette 0.46.2 (u. a. CVE-2025-62727, Range-DoS auf `FileResponse` ohne Anmeldung). Behoben durch FastAPI 0.165.0 / Starlette 1.10.0 (v0.12.2). Bewusst nicht: Hashes in `requirements.txt`, SBOM, Image-Scan mit Trivy |
+| N9 | **behoben/akzeptiert:** KI-Fehler ohne Antworttext im Log (v0.12.2). Der Offline-Stand im `localStorage` bleibt (nötig für den Offline-Betrieb), „Abmelden“ löscht ihn (v0.12.0) |
 
 ### Nachtrag v0.10.0: Foto-Endpunkt `/api/ai/label`
 
@@ -192,4 +195,4 @@ Nicht im ursprünglichen Umfang. Befunde: Größenprüfung nur über `Content-Le
 
 - Geprüft wurde der Code, nicht die konkrete Produktionsumgebung (Reverse-Proxy-Konfiguration, Firewall, Host-Härtung, Backup-Aufbewahrung).
 - Kein Penetrationstest gegen eine laufende Instanz; die dynamischen Prüfungen liefen gegen eine lokale Test-Instanz mit `TestClient`.
-- Abhängigkeiten wurden nicht auf bekannte CVEs gescannt (kein `pip-audit`/Trivy-Lauf).
+- Abhängigkeiten wurden für den ursprünglichen Bericht nicht auf bekannte CVEs gescannt. Nachgeholt am 19.11.2026 mit `pip-audit` (siehe N8).

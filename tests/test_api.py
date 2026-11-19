@@ -33,7 +33,7 @@ def test_flow():
     c = client()
     assert c.get("/api/state").status_code == 200
     from app import __version__
-    assert c.get("/healthz").json() == {"ok": True, "version": __version__}
+    assert c.get("/healthz").json() == {"ok": True}
     assert c.get("/api/state").json()["version"] == __version__
     assert c.post("/api/onboarding", json={}).status_code == 403          # ohne App-Header
     r = c.post("/api/budget/preview", headers=H, json={"start_weight": 95, "height_cm": 178, "birth_year": 1975})
@@ -88,8 +88,9 @@ def test_flow():
     assert pair["qr_svg"].startswith("<svg") and pair["app_link"].startswith("lifedashboard://pair#")
     assert c.get("/api/ingest/pair").json()["secret"] == secret
     r = c.post("/api/ingest/health", content=body, headers={"X-Signature": "sha256=00"})
-    assert r.status_code == 401 and "passt nicht" in r.json()["detail"]
-    assert c.get("/api/ingest/status").json()["last"][0]["kind"] == "denied"
+    assert r.status_code == 401 and r.json()["detail"] == "nicht autorisiert"   # Grund nicht nach außen
+    last = c.get("/api/ingest/status").json()["last"][0]
+    assert last["kind"] == "denied" and last["summary"]["reason"]               # aber im Protokoll
     sig = "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
     r = c.post("/api/ingest/health", content=body, headers={"X-Signature": sig, "content-type": "application/json"})
     assert r.status_code == 200 and r.json()["days"] == 1
