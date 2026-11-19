@@ -164,6 +164,9 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); ou
 .ring .t b { font-size: 3rem; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -1px; }
 .ring .t span { font-size: .85rem; color: var(--muted); margin-top: 4px; }
 .ring .t.over b { color: var(--bad); }
+.ring.toggle { cursor: pointer; -webkit-tap-highlight-color: transparent; border-radius: 50%; }
+.ring.toggle:active { transform: scale(.97); }
+.ring.toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
 .daynav { display: flex; align-items: center; justify-content: space-between; margin: 4px 0 0; }
 .daynav b { font-size: 1.05rem; }
 

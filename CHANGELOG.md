@@ -6,6 +6,9 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+### Hinzugefügt
+- Heute: Tipp auf den Ring schaltet die Anzeige zwischen Punkten und kcal um. Die Einstellung unter **Mehr → Anzeige** bleibt.
+
 ## [0.10.0] – 2026-11-18
 
 ### Hinzugefügt

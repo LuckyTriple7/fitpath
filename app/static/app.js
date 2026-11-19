@@ -374,7 +374,7 @@ function viewToday() {
       <b>${isToday ? "Heute" : fmtDay(o.day, { weekday: "long", day: "2-digit", month: "2-digit" })}</b>
       <button class="btn icon small-icon" id="next" aria-label="Tag vor" ${isToday ? "disabled" : ""}>›</button></div>
     <div class="card hero">
-      <div class="ring">${ringSvg(used / Math.max(budget + bonus, 1), over)}
+      <div class="ring toggle" id="ring" role="button" tabindex="0" aria-label="Anzeige umschalten auf ${P ? "Kalorien" : "Punkte"}">${ringSvg(used / Math.max(budget + bonus, 1), over)}
         <div class="t${over ? " over" : ""}"><b>${num.format(left)}</b><span>${P ? "Punkte übrig" : "kcal übrig"}</span></div></div>
       ${left < 0 && fromRes ? `<p><span class="pill warn">${num.format(fromRes)} ${unit()} aus der Wochenreserve</span></p>` : ""}
       <div class="tiles three">
@@ -395,6 +395,9 @@ function viewToday() {
     ${activityHtml()}
     ${weightMiniHtml()}`;
 
+  const ring = $("#ring");
+  ring.onclick = toggleDisplay;
+  ring.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleDisplay(); } };
   $("#prev").onclick = () => goDay(addDays(o.day, -1));
   $("#next").onclick = () => !isToday && goDay(addDays(o.day, 1));
   $("#week").onclick = e => { const d = e.target.closest("[data-day]"); if (d && d.dataset.day <= S.today) goDay(d.dataset.day); };
@@ -408,6 +411,24 @@ function viewToday() {
   bindChallenge();
   $("#act-card") && ($("#act-card").onclick = openSteps);
   $("#weigh-btn") && ($("#weigh-btn").onclick = e => { e.preventDefault(); openWeigh(); });
+}
+
+// Tipp auf den Ring: Punkte <-> kcal. Sofort umschalten, dann speichern;
+// der Server liefert den Stand von heute, deshalb nur die Einstellung übernehmen.
+async function toggleDisplay() {
+  const prev = S.settings.display, next = isPoints() ? "kcal" : "points";
+  S.settings.display = next;
+  vibrate(15);
+  viewToday();
+  try {
+    const r = await api("/api/settings", { method: "PUT", body: { display: next } });
+    S.settings = r.settings;
+    if (!curDay) store("fp_state", S);
+  } catch (e) {
+    S.settings.display = prev;
+    viewToday();
+    toast("Offline – Anzeige nicht gespeichert");
+  }
 }
 
 async function goDay(day) {
