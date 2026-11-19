@@ -179,7 +179,8 @@ KI-Fehler werden inklusive Antworttext geloggt; der Service Worker cached `/` un
 | N4 | **behoben:** `compare_digest` über Bytes, ungültige `Content-Length` → 400 |
 | N5 | **behoben:** alle JSON-Endpunkte über `_json()` (Limit, Typprüfung), Feldfehler → 400 |
 | N1 | **behoben:** Limits je IP (5/min, 3 offen) zusätzlich zu den globalen (60/min, 100 offen). Client-IP aus `X-Forwarded-For`/`X-Real-IP` nur bei Verbindung aus privatem Netz. Freigabedialog zeigt „selbes Netz“ oder die fremde Adresse mit Warnung (v0.11.2). Restrisiko: Wer aus demselben Netz kommt oder den Nutzer überredet, trotz Warnung zuzulassen |
-| N3, N6–N9 | offen |
+| N3 | **teilweise:** Abmeldung nach 180 Tagen ohne Nutzung (`SESSION_IDLE_DAYS`), „Abmelden“ für das aktuelle Gerät (v0.12.0). Bewusst nicht: Rotation des Session-Tokens (bei einer Ein-Personen-App kaum Nutzen). Login-Token im Pfad bleibt (einmalig, 15 Minuten gültig) |
+| N6–N9 | offen |
 
 ### Nachtrag v0.10.0: Foto-Endpunkt `/api/ai/label`
 

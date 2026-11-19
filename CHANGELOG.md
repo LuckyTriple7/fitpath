@@ -6,6 +6,12 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+### Hinzugefügt
+- **Mehr → Geräte:** „Abmelden“ jetzt auch für das Gerät, an dem du gerade sitzt. Löscht Session und Push-Abo und entfernt die zwischengespeicherten Daten aus dem Browser.
+
+### Sicherheit
+- Geräte, die 180 Tage nicht benutzt wurden, werden automatisch abgemeldet. Ein kopiertes Cookie gilt damit nicht mehr unbegrenzt. Änderbar mit `SESSION_IDLE_DAYS` (Audit N3).
+
 ## [0.11.2] – 2026-11-19
 
 ### Sicherheit

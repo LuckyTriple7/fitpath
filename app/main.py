@@ -857,8 +857,16 @@ async def device_rename(did: int, request: Request, device=Depends(auth.require)
 @app.delete("/api/devices/{did}")
 def device_delete(did: int, device=Depends(auth.require)):
     with db.connect() as conn:
-        conn.execute("DELETE FROM push_subs WHERE device_id = ?", (did,))
-        conn.execute("DELETE FROM devices WHERE id = ?", (did,))
+        auth.remove_device(conn, did)
+    return {"ok": True}
+
+
+@app.post("/api/logout")
+def logout(response: Response, device=Depends(auth.require)):
+    """Dieses Gerät abmelden: Session und Push-Abo löschen, Cookie entfernen."""
+    with db.connect() as conn:
+        auth.remove_device(conn, device["id"])
+    response.delete_cookie(auth.COOKIE, path="/", secure=auth.COOKIE_SECURE, httponly=True, samesite="lax")
     return {"ok": True}
 
 

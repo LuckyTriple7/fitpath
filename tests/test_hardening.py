@@ -1,6 +1,7 @@
 """Befunde aus SECURITY-AUDIT.md: M1 (Webhook), M4 (SSRF), N1 (Kopplung), N2, N4, N5, Foto-Endpunkt."""
 
 import socket
+from datetime import timedelta
 
 from app import ai, auth, db, ingest, main, recipe_import
 from tests.test_api import H, client
@@ -132,3 +133,33 @@ def test_pairing_limit_per_ip():
     assert not auth._pair_allowed("203.0.113.3")
     assert auth._pair_allowed("203.0.113.4")
     auth._pair_calls.clear()
+
+
+def test_logout_current_device():
+    c = client()
+    assert c.get("/api/state").status_code == 200
+    assert c.post("/api/logout", json={}).status_code == 403              # ohne App-Header (CSRF)
+    r = c.post("/api/logout", headers=H, json={})
+    assert r.status_code == 200 and "fp_session" in r.headers.get("set-cookie", "")
+    assert c.get("/api/state").status_code == 401
+    c.__exit__(None, None, None)
+
+
+def test_idle_sessions_expire():
+    c = client()
+    did = next(d["id"] for d in c.get("/api/devices").json() if d["current"])
+    old = db.iso(db.now_utc() - timedelta(days=auth.SESSION_IDLE_DAYS + 1))
+    with db.connect() as conn:
+        conn.execute("UPDATE devices SET last_seen = ? WHERE id = ?", (old, did))
+    assert c.get("/api/state").status_code == 401                          # zu lange nicht benutzt
+    with db.connect() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM devices WHERE id = ?", (did,)).fetchone()[0] == 0
+
+    other = client()                                                       # andere ungenutzte Geräte räumt prune_idle weg
+    with db.connect() as conn:
+        conn.execute("UPDATE devices SET last_seen = ? WHERE id != ?", (old, max(r[0] for r in conn.execute("SELECT id FROM devices"))))
+        assert auth.prune_idle(conn) >= 1
+        assert conn.execute("SELECT COUNT(*) FROM devices WHERE last_seen = ?", (old,)).fetchone()[0] == 0
+    assert other.get("/api/state").status_code == 200
+    c.__exit__(None, None, None)
+    other.__exit__(None, None, None)

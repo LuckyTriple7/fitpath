@@ -1672,7 +1672,8 @@ async function loadDevices() {
     $("#devs").innerHTML = `<ul class="list">${ds.map(d => `<li><span class="ic">📱</span><div class="bd"><b>${esc(d.name)}${d.current ? ' <span class="pill good">dieses</span>' : ""}</b>
       <div class="meta">seit ${fmtDay(d.created.slice(0, 10))} · zuletzt ${d.last_seen ? fmtAgo(d.last_seen) : "–"}</div></div>
       <button class="btn icon small-icon" data-ren="${d.id}" aria-label="Umbenennen">✏️</button>
-      ${d.current ? "" : `<button class="btn small danger" data-dev="${d.id}">Abmelden</button>`}</li>`).join("")}</ul>`;
+      <button class="btn small danger" ${d.current ? 'id="logout"' : `data-dev="${d.id}"`}>Abmelden</button></li>`).join("")}</ul>`;
+    $("#logout") && ($("#logout").onclick = logout);
     $$("[data-dev]").forEach(b => (b.onclick = async () => { if (!confirm("Gerät abmelden?")) return; await api(`/api/devices/${b.dataset.dev}`, { method: "DELETE" }); loadDevices(); }));
     $$("[data-ren]").forEach(b => (b.onclick = async () => {
       const d = ds.find(x => x.id === +b.dataset.ren);
@@ -1683,6 +1684,16 @@ async function loadDevices() {
       loadDevices();
     }));
   } catch (_) { $("#devs").textContent = "Offline"; }
+}
+
+async function logout() {
+  if (!confirm("Dieses Gerät abmelden? Zum Weiterarbeiten musst du es danach neu verbinden.")) return;
+  try { await api("/api/logout", { method: "POST", body: {} }); }
+  catch (e) { if (!(e instanceof AuthError)) return toast(e.message); }
+  // zwischengespeicherte Daten (u. a. Gewicht) nicht auf dem Gerät lassen
+  try { localStorage.removeItem("fp_state"); } catch (_) { /* egal */ }
+  S = null;
+  viewLogin();
 }
 
 /* ---------- Push ---------- */

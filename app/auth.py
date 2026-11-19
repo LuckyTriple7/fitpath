@@ -29,6 +29,8 @@ from . import db
 
 COOKIE = "fp_session"
 COOKIE_DAYS = 400
+# Geräte, die so lange nicht benutzt wurden, werden abgemeldet (gestohlene Cookies verfallen damit)
+SESSION_IDLE_DAYS = int(os.environ.get("SESSION_IDLE_DAYS", "180"))
 COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "true").lower() != "false"
 PUBLIC_URL = os.environ.get("PUBLIC_URL", "http://localhost:8080").rstrip("/")
 LINK_MINUTES = 15
@@ -210,6 +212,20 @@ def pair_poll(conn, rid: str) -> tuple[str, str | None]:
     return "approved", _new_session(conn, row["name"])
 
 
+def remove_device(conn, did: int) -> None:
+    conn.execute("DELETE FROM push_subs WHERE device_id = ?", (did,))
+    conn.execute("DELETE FROM devices WHERE id = ?", (did,))
+
+
+def prune_idle(conn) -> int:
+    """Geräte abmelden, die länger als SESSION_IDLE_DAYS nicht benutzt wurden."""
+    cutoff = db.iso(db.now_utc() - timedelta(days=SESSION_IDLE_DAYS))
+    ids = [r[0] for r in conn.execute("SELECT id FROM devices WHERE COALESCE(last_seen, created) < ?", (cutoff,))]
+    for did in ids:
+        remove_device(conn, did)
+    return len(ids)
+
+
 def device_for(request: Request):
     token = request.cookies.get(COOKIE)
     if not token:
@@ -219,8 +235,13 @@ def device_for(request: Request):
         if not row:
             return None
         now = db.now_utc()
-        if not row["last_seen"] or (now - db.parse(row["last_seen"])).total_seconds() > 600:
+        seen = db.parse(row["last_seen"] or row["created"])
+        if (now - seen).days >= SESSION_IDLE_DAYS:
+            remove_device(conn, row["id"])
+            return None
+        if not row["last_seen"] or (now - seen).total_seconds() > 600:
             conn.execute("UPDATE devices SET last_seen = ? WHERE id = ?", (db.iso(now), row["id"]))
+            prune_idle(conn)      # bei der Gelegenheit auch die anderen (höchstens alle 10 Minuten je Gerät)
         return dict(row)
 
 
