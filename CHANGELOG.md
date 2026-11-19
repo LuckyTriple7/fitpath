@@ -6,6 +6,8 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+## [0.12.2] – 2026-11-19
+
 ### Sicherheit
 - Abhängigkeiten aktualisiert: FastAPI 0.165.0 (bringt Starlette 1.10.0), Uvicorn 0.54.0, pywebpush 2.5.0, tzdata 2026.6. Starlette 0.46.2 hatte bekannte Lücken, für FitPath relevant vor allem CVE-2025-62727: Ein präparierter `Range`-Header konnte die Auslieferung der App-Dateien ohne Anmeldung ausbremsen (Audit N8).
 - CI: Actions per Commit-SHA und Basisimage per Digest gepinnt, `pip-audit` prüft bei jedem Lauf und wöchentlich auf bekannte Lücken, Dependabot schlägt Updates vor (Audit N8).
