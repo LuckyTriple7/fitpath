@@ -127,7 +127,9 @@ def bmr(sex: str, weight: float, height_cm: float, years: int) -> float:
 def kcal_target(s: dict, weight: float, today: date | None = None) -> dict:
     sex = "w" if s.get("sex") == "w" else "m"
     b = bmr(sex, weight, float(s.get("height_cm") or 175), age(s.get("birth_year") or 1975, today))
-    tdee = b * float(s.get("activity") or 1.375)
+    # Korrektur aus dem adaptiven Bedarf (app/adaptive.py), nur nach Bestätigung durch den Nutzer
+    adjust = int(s.get("tdee_adjust") or 0)
+    tdee = b * float(s.get("activity") or 1.375) + adjust
     pace = 0.0
     if s.get("mode", "lose") == "lose":
         pace = min(float(s.get("pace") or 0.5), weight * MAX_LOSS_SHARE_WEEK)
@@ -135,7 +137,7 @@ def kcal_target(s: dict, weight: float, today: date | None = None) -> dict:
     floor = KCAL_FLOOR[sex]
     target = max(tdee - deficit, floor)
     return {
-        "bmr": round(b), "tdee": round(tdee), "deficit": round(tdee - target),
+        "bmr": round(b), "tdee": round(tdee), "adjust": adjust, "deficit": round(tdee - target),
         "target": round(target), "floor": floor, "floor_hit": tdee - deficit < floor,
         "pace": round((tdee - target) * 7 / KCAL_PER_KG, 2),
     }

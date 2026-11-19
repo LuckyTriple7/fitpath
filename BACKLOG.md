@@ -8,7 +8,6 @@ Doku: [README.md](README.md)
 - Coach mit Allowlist (Budget, Trend, Schritte, Top-Snack-Zeiten; nie Notizen).
 - Foto → Schätzung (nur mit Schalter, Standard aus).
 - Wochenrückblick.
-- Adaptiver Bedarf: ab 14 Tagen mit Einträgen Ø Zufuhr − (Trendänderung × 7.700) ÷ Tage, mit Sicherheitsgrad; Vorschlag, den Budget-Faktor anzupassen.
 
 ### Schritt 5 – Anbindungen
 - Home-Assistant-Sensoren (Punkte übrig, Trendgewicht, Streak) über Token-Endpunkt.
@@ -33,3 +32,8 @@ Commit-Angaben bis 18.11.2026 beziehen sich auf das frühere Sammel-Repo, aus de
 - **18.11.2026** Lieber-Tausch im Heißhunger-SOS: Alternativen je Gelüst mit Punkten, „Bewusst genießen“ mit Budget-Hinweis, Auswertung in der Statistik (0.8.0)
 - **18.11.2026** Neues Gerät per QR-Code oder 6-stelligem Code verbinden, Freigabe auf einem verbundenen Gerät (0.9.0)
 - **18.11.2026** Nährwerte vom Foto der Packung (KI liest die Tabelle, Formular vorausgefüllt, Plausibilitätsprüfung)
+- **19.11.2026** Tipp auf den Ring schaltet Punkte/kcal um (0.11.0)
+- **19.11.2026** Sicherheitsaudit umgesetzt: Webhook gegen DoS, 400 statt 500 bei kaputten Eingaben, Rezept-Import gegen DNS-Rebinding, Kopplungs-Limits je IP mit Netz-Hinweis, atomare Einmal-Links (0.11.1, 0.11.2), Session-Ablauf nach 180 Tagen und „Abmelden“ fürs aktuelle Gerät (0.12.0), Abhängigkeiten mit bekannten Lücken aktualisiert, Lieferkette gepinnt, pip-audit und Dependabot (0.12.2)
+- **19.11.2026** Gewichtskarte auf „Heute“ zeigt auch den Wert der Waage (0.12.1)
+- **19.11.2026** Python 3.15, `httpx2` statt `httpx`, CI testet mit der Python-Version des Images (0.13.0)
+- **19.11.2026** Echter Bedarf: Verbrauch aus Einträgen und Gewicht, Vorschlag zur Korrektur des Budgets

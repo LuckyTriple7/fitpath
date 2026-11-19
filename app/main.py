@@ -13,7 +13,7 @@ import httpx2
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 
-from . import __version__, ai, auth, backup, body, db, diary, foods, ingest, motivation, points, push, recipe_import, swaps
+from . import __version__, adaptive, ai, auth, backup, body, db, diary, foods, ingest, motivation, points, push, recipe_import, swaps
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 MAX_INGEST_BYTES = 12 * 1024 * 1024
@@ -207,6 +207,7 @@ VALIDATORS = {
     "activity": lambda v: min(points.ACTIVITY_LEVELS, key=lambda k: abs(k - float(v))),
     "mode": lambda v: "keep" if v == "keep" else "lose",
     "pace": _range(0.1, 1.0),
+    "tdee_adjust": lambda v: max(-500, min(500, int(round(float(v) / 50)) * 50)),
     "display": lambda v: "kcal" if v == "kcal" else "points",
     "steps_baseline": _range(0, 20000, int),
     "steps_goal": _range(1000, 40000, int),
@@ -614,8 +615,10 @@ async def activity_add(request: Request, device=Depends(auth.require)):
 @app.get("/api/stats")
 def stats(days: int = 30, device=Depends(auth.require)):
     with db.connect() as conn:
-        d = diary.history(conn, db.get_settings(conn), max(7, min(days, 365)))
+        s = db.get_settings(conn)
+        d = diary.history(conn, s, max(7, min(days, 365)))
         d["cravings"] = motivation.craving_stats(conn, d["days"][0]["day"])
+        d["adaptive"] = adaptive.estimate(conn, s)
         return d
 
 

@@ -1427,6 +1427,7 @@ async function viewStats() {
       <div class="tile"><div class="v">${a.steps ? num.format(a.steps) : "–"}</div><div class="l">Ø Schritte</div></div>
       <div class="tile"><div class="v">${dw != null ? fmtSigned(dw) : "–"}</div><div class="l">kg Trend im Zeitraum</div></div>
     </div>
+    ${adaptiveHtml(d.adaptive, P)}
     <div class="card"><div class="card-head"><h2>${P ? "Punkte" : "kcal"} pro Tag</h2><small>Budget ${P ? b.points + " P" : num.format(b.target) + " kcal"}</small></div>
       ${chartDaily(d.days, P ? "points" : "kcal", P ? b.points : b.target, P ? "act_points" : "act_kcal")}
       <div class="legend"><span><i style="background:var(--good)"></i>im Budget</span><span><i style="background:var(--bad)"></i>drüber</span><span><i style="background:var(--muted)"></i>Budget + Aktivität</span></div></div>
@@ -1443,6 +1444,40 @@ async function viewStats() {
     <div class="card"><div class="card-head"><h2>🏆 Größte Punkte-Lieferanten</h2></div>
       ${d.top.length ? `<ul class="list">${d.top.map(x => `<li><div class="bd"><b>${esc(x.name)}</b><div class="meta">${x.count}× · ${num.format(x.kcal)} kcal</div></div><span class="val">${P ? x.points + " P" : num.format(x.kcal) + " kcal"}</span></li>`).join("")}</ul>` : `<div class="empty">Noch keine Einträge.</div>`}</div>
     <div class="card"><div class="card-head"><h2>👟 Schritte</h2><small>Ziel ${num.format(S.settings.steps_goal)}</small></div>${chartSteps(d.days, S.settings.steps_goal)}</div>`;
+  bindAdaptive(d.adaptive);
+}
+
+/* Adaptiver Bedarf: echter Verbrauch aus Einträgen und Gewicht (app/adaptive.py) */
+function adaptiveHtml(a, P) {
+  if (!a) return "";
+  const head = `<div class="card-head"><h2>🔥 Echter Bedarf</h2><small>letzte ${a.window_days} Tage</small></div>`;
+  const adj = a.adjust ? `<p class="note">Aktive Korrektur: <b>${a.adjust > 0 ? "+" : "−"}${num.format(Math.abs(a.adjust))} kcal</b> pro Tag. <button class="linkbtn" id="adj-reset">Zurücksetzen</button></p>` : "";
+  if (a.status === "early") return `<div class="card">${head}
+    <p class="note">Ab ${a.min_days} Tagen mit Einträgen und ${a.min_weighins} Wiegewerten rechnet FitPath aus, wie viel du wirklich verbrauchst, statt nur nach Formel. Bisher: ${a.days} ${a.days === 1 ? "Tag" : "Tage"}, ${a.weighins} Wiegewerte.</p>${adj}</div>`;
+  if (a.status === "gaps") return `<div class="card">${head}
+    <p class="note">Zu wenige vollständig erfasste Tage: ${a.logged} von ${a.days}, nötig sind ${a.need_logged}. Ein Tag zählt ab zwei Mahlzeiten und ${num.format(800)} kcal, sonst wäre der Verbrauch zu niedrig geschätzt.</p>${adj}</div>`;
+  const conf = { hoch: "good", mittel: "warn", niedrig: "bad" }[a.confidence];
+  const now = a.model + a.adjust + a.activity;
+  const diff = a.suggested - a.adjust;
+  const effect = P ? `${a.points_new} statt ${a.points_now} Punkte` : `Ziel ${num.format(a.target_new)} statt ${num.format(a.target_now)} kcal`;
+  return `<div class="card">${head}
+    <div class="spread"><div><div style="font-size:1.8rem;font-weight:800">≈ ${num.format(a.real)} kcal</div><small>pro Tag, ± ${num.format(a.error)} kcal</small></div>
+      <span class="pill ${conf}">Sicherheit ${a.confidence}</span></div>
+    <p class="note">Ø ${num.format(a.intake)} kcal gegessen an ${a.logged} von ${a.days} Tagen, Gewicht ${fmtSigned(a.kg_per_week)} kg pro Woche. FitPath rechnet bisher mit ${num.format(now)} kcal (Formel ${num.format(a.model)}${a.adjust ? `, Korrektur ${a.adjust > 0 ? "+" : "−"}${num.format(Math.abs(a.adjust))}` : ""}${a.activity ? `, Aktivität ${num.format(a.activity)}` : ""}).</p>
+    ${a.suggest ? `<button class="btn primary block" id="adj-apply">Budget anpassen: ${diff > 0 ? "+" : "−"}${num.format(Math.abs(diff))} kcal pro Tag (${effect})</button>`
+      : a.confidence === "niedrig" ? `<p class="note">Für einen Vorschlag noch zu unsicher, das Gewicht schwankt stark. Regelmäßiger wiegen hilft.</p>`
+      : `<p class="note">✅ Passt: Rechnung und Wirklichkeit liegen nah beieinander.</p>`}
+    ${adj}
+    <p class="note">Stimmt nur, wenn du alles erfasst, auch 0-Punkte-Lebensmittel. Ein Kilo Körperfett ≈ ${num.format(7700)} kcal.</p></div>`;
+}
+
+function bindAdaptive(a) {
+  const set = async (v, msg) => {
+    try { S = await api("/api/settings", { method: "PUT", body: { tdee_adjust: v } }); toast(msg); viewStats(); }
+    catch (e) { toast(e.message); }
+  };
+  $("#adj-apply") && ($("#adj-apply").onclick = () => set(a.suggested, "Budget angepasst"));
+  $("#adj-reset") && ($("#adj-reset").onclick = () => { if (confirm("Korrektur zurücksetzen? Das Budget folgt dann wieder nur der Formel.")) set(0, "Korrektur entfernt"); });
 }
 
 function hbar(label, v, target, u, note = "") {
@@ -1486,7 +1521,7 @@ async function viewMore() {
   view.innerHTML = `
     <div class="card"><div class="card-head"><h2>🎯 Ziele und Profil</h2><button class="btn small" id="edit-goals">Ändern</button></div>
       <p>${s.mode === "keep" ? "Gewicht halten" : `Abnehmen, ${num1.format(s.pace)} kg pro Woche`} · Ziel ${num1.format(s.goal_weight)} kg</p>
-      <p class="note">Grundumsatz ${num.format(b.bmr)} kcal × Aktivität ${String(s.activity).replace(".", ",")} = ${num.format(b.tdee)} kcal Bedarf${b.deficit ? ` − ${num.format(b.deficit)} kcal Defizit` : ""} = <b>${num.format(b.target)} kcal</b> = <b>${b.points} Punkte</b> pro Tag (bei ${num1.format(b.weight)} kg).
+      <p class="note">Grundumsatz ${num.format(b.bmr)} kcal × Aktivität ${String(s.activity).replace(".", ",")}${b.adjust ? ` ${b.adjust > 0 ? "+" : "−"} ${num.format(Math.abs(b.adjust))} kcal Korrektur (Statistik → Echter Bedarf)` : ""} = ${num.format(b.tdee)} kcal Bedarf${b.deficit ? ` − ${num.format(b.deficit)} kcal Defizit` : ""} = <b>${num.format(b.target)} kcal</b> = <b>${b.points} Punkte</b> pro Tag (bei ${num1.format(b.weight)} kg).
       ${b.floor_hit ? `Untergrenze ${num.format(b.floor)} kcal greift – weniger wäre auf Dauer nicht gesund.` : ""}</p></div>
     <div class="card"><h2>Anzeige</h2>${chipGroup("display", [["points", "Punkte"], ["kcal", "Kalorien"]], s.display)}
       <details class="more mt"><summary>So rechnet FitPath</summary>

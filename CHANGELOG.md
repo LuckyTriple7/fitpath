@@ -6,6 +6,9 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+### Hinzugefügt
+- **Echter Bedarf** in der Statistik: Aus den Einträgen und dem Gewichtsverlauf der letzten 28 Tage schätzt FitPath, wie viel du wirklich verbrauchst (mit ± kcal und Sicherheitsgrad), und vergleicht das mit der Formel. Bei mindestens 100 kcal Abweichung gibt es den Knopf **Budget anpassen**. Er setzt eine Korrektur des Bedarfs (höchstens ± 500 kcal), die sich jederzeit zurücksetzen lässt. Braucht 14 Tage mit Einträgen und 6 Wiegewerten.
+
 ## [0.13.0] – 2026-11-19
 
 ### Geändert
