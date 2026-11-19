@@ -6,6 +6,12 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+### Sicherheit
+- Health-Connect-Webhook: Der Body wird jetzt mit hartem Limit gelesen, auch ohne `Content-Length` (chunked). Nach 20 abgelehnten Anfragen pro Minute antwortet FitPath mit 429, ohne den Body zu lesen, höchstens 2 Uploads laufen gleichzeitig. Abgelehnte Anfragen landen nur noch einmal pro Minute im Protokoll (Audit M1).
+- Alle JSON-Endpunkte lesen den Body mit Limit (2 MB, Foto 8 MB) und antworten bei kaputtem JSON, falschem Typ oder ungültigen Feldern mit 400 statt 500 (Audit N4, N5).
+- Anmeldelink wird in einem Schritt gelesen und gelöscht, zwei gleichzeitige Klicks ergeben nicht mehr zwei Sessions (Audit N2).
+- Rezept-Import lässt nur noch öffentliche Adressen zu (`is_global`, sperrt damit auch CGNAT 100.64.0.0/10) (Audit M4, teilweise).
+
 ## [0.11.0] – 2026-11-19
 
 ### Hinzugefügt

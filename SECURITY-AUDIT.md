@@ -167,6 +167,25 @@ KI-Fehler werden inklusive Antworttext geloggt; der Service Worker cached `/` un
 
 ---
 
+## Stand der Umsetzung (19.11.2026, nach v0.11.0)
+
+| ID | Stand |
+|---|---|
+| M1 | **behoben:** Body mit hartem Limit als Stream (auch chunked), 429 nach 20 Ablehnungen pro Minute vor dem Lesen, höchstens 2 parallele Uploads, Ablehnungen höchstens einmal pro Minute im Protokoll |
+| M2 | **akzeptiert:** Server wird nur vom Betreiber genutzt. Neu bewerten, wenn Backups den Server verlassen |
+| M3 | **akzeptiert:** NPMPlus übernimmt HTTPS und HSTS. Voraussetzung: HSTS am Proxy-Host aktiv, `COOKIE_SECURE` bleibt `true`, `PUBLIC_URL` mit `https://` |
+| M4 | **teilweise:** `is_global` statt Einzelprüfungen (sperrt CGNAT), ungültige Adressen abgefangen. DNS-Rebinding bleibt offen. Hinweis: Eine IPv6-Zonen-ID führt unter Python ≥ 3.9 nicht zum `ValueError`, `ip_address()` versteht sie |
+| N2 | **behoben:** `DELETE … RETURNING` |
+| N4 | **behoben:** `compare_digest` über Bytes, ungültige `Content-Length` → 400 |
+| N5 | **behoben:** alle JSON-Endpunkte über `_json()` (Limit, Typprüfung), Feldfehler → 400 |
+| N1, N3, N6–N9 | offen |
+
+### Nachtrag v0.10.0: Foto-Endpunkt `/api/ai/label`
+
+Nicht im ursprünglichen Umfang. Befunde: Größenprüfung nur über `Content-Length`, Nicht-Objekt-JSON → 500 (beides behoben, Limit 8 MB über `_json()`). Kein Limit für KI-Aufrufe (nur mit gültiger Session ausnutzbar, offen). Die Fotos gehen an den KI-Anbieter hinter LiteLLM und werden in FitPath nicht gespeichert.
+
+---
+
 ## Grenzen der Prüfung
 
 - Geprüft wurde der Code, nicht die konkrete Produktionsumgebung (Reverse-Proxy-Konfiguration, Firewall, Host-Härtung, Backup-Aufbewahrung).

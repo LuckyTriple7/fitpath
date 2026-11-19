@@ -19,12 +19,16 @@ import hashlib
 import hmac
 import json
 import secrets
+import threading
+import time
 from datetime import timedelta
 from urllib.parse import quote, urlencode
 
 from . import db
 
 KEEP_DAYS = 14
+DENY_PER_MINUTE = 20        # abgelehnte Anfragen, danach 429 ohne den Body zu lesen
+DENY_LOG_SECONDS = 60       # höchstens ein Protokolleintrag für Ablehnungen pro Minute
 RAW_LIMIT = 32_000
 BODY_KINDS = {"weight": ("weight", "kilograms", 20, 400), "body_fat": ("fat", "percentage", 1, 75)}
 
@@ -66,11 +70,12 @@ def check(secret: str | None, body: bytes, signature: str | None, authorization:
         if not signature.startswith("sha256="):
             return "Signatur in unbekanntem Format"
         expected = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
-        if hmac.compare_digest(expected, signature[7:].strip().lower()):
+        # als Bytes vergleichen: compare_digest wirft bei Nicht-ASCII-Strings TypeError
+        if hmac.compare_digest(expected.encode(), signature[7:].strip().lower().encode()):
             return None
         return "Signatur passt nicht – Geheimnis in Life Dashboard stimmt nicht mit FitPath überein"
     if authorization and authorization.lower().startswith("bearer "):
-        if hmac.compare_digest(authorization[7:].strip(), secret):
+        if hmac.compare_digest(authorization[7:].strip().encode(), secret.encode()):
             return None
         return "Bearer-Header passt nicht"
     return "Ohne Signatur – in Life Dashboard ist kein HMAC signing secret eingetragen"
@@ -80,8 +85,32 @@ def verify(secret: str | None, body: bytes, signature: str | None, authorization
     return check(secret, body, signature, authorization) is None
 
 
+_deny_lock = threading.Lock()
+_denied: list = []          # Zeitpunkte der Ablehnungen der letzten Minute
+_deny_logged = [0.0, 0]     # letzter Protokolleintrag, seitdem nicht protokolliert
+
+
+def too_many_denied() -> bool:
+    with _deny_lock:
+        now = time.monotonic()
+        while _denied and now - _denied[0] > 60:
+            _denied.pop(0)
+        return len(_denied) >= DENY_PER_MINUTE
+
+
 def log_denied(conn, reason: str, size: int) -> None:
-    _log(conn, "denied", None, {"reason": reason, "bytes": size})
+    """Ablehnung zählen; ins Protokoll nur einmal pro Minute (sonst ließe sich die DB fluten)."""
+    with _deny_lock:
+        now = time.monotonic()
+        _denied.append(now)
+        if _deny_logged[0] and now - _deny_logged[0] < DENY_LOG_SECONDS:
+            _deny_logged[1] += 1
+            return
+        skipped, _deny_logged[0], _deny_logged[1] = _deny_logged[1], now, 0
+    summary = {"reason": reason, "bytes": size}
+    if skipped:
+        summary["more"] = skipped
+    _log(conn, "denied", None, summary)
 
 
 def _log(conn, kind: str, seq, summary: dict, raw: bytes | None = None) -> None:

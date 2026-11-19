@@ -75,8 +75,12 @@ def _public_host(host: str) -> bool:
     except socket.gaierror:
         return False
     for info in infos:
-        ip = ipaddress.ip_address(info[4][0])
-        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+        try:
+            ip = ipaddress.ip_address(info[4][0])
+        except ValueError:
+            return False
+        # is_global schließt auch CGNAT (100.64.0.0/10) und andere nicht öffentliche Netze aus
+        if not ip.is_global or ip.is_multicast:
             return False
     return True
 

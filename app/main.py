@@ -17,6 +17,10 @@ from . import __version__, ai, auth, backup, body, db, diary, foods, ingest, mot
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 MAX_INGEST_BYTES = 12 * 1024 * 1024
+MAX_JSON_BYTES = 2 * 1024 * 1024
+MAX_LABEL_BYTES = 8_000_000
+# Höchstens so viele Webhook-Bodys gleichzeitig im Speicher (mem_limit 192m)
+INGEST_SLOTS = asyncio.Semaphore(2)
 
 
 @asynccontextmanager
@@ -139,6 +143,34 @@ def auth_confirm(token: str, request: Request):
 
 # ---------- Hilfen ----------
 
+async def _read_body(request: Request, limit: int) -> bytes:
+    """Body mit hartem Limit lesen. Content-Length allein reicht nicht (chunked hat keinen)."""
+    length = request.headers.get("content-length")
+    if length is not None:
+        try:
+            if int(length) > limit:
+                raise HTTPException(413, "zu groß")
+        except ValueError:
+            raise HTTPException(400, "Content-Length ungültig")
+    body = bytearray()
+    async for chunk in request.stream():
+        body += chunk
+        if len(body) > limit:
+            raise HTTPException(413, "zu groß")
+    return bytes(body)
+
+
+async def _json(request: Request, limit: int = MAX_JSON_BYTES, allow_list: bool = False):
+    """JSON-Body als Objekt (oder Liste, wenn erlaubt), sonst 400 statt 500."""
+    try:
+        data = json.loads(await _read_body(request, limit))
+    except ValueError:
+        raise HTTPException(400, "kein gültiges JSON")
+    if isinstance(data, dict) or (allow_list and isinstance(data, list)):
+        return data
+    raise HTTPException(400, "JSON-Objekt erwartet")
+
+
 def _clean_text(v, n=120):
     return str(v or "").strip()[:n]
 
@@ -193,6 +225,8 @@ VALIDATORS = {
 
 
 def _save_settings(conn, data: dict) -> None:
+    if not isinstance(data, dict):
+        raise HTTPException(400, "Einstellungen als Objekt erwartet")
     for key, value in data.items():
         if key not in VALIDATORS:
             continue
@@ -232,7 +266,7 @@ def get_state(day: str | None = None, device=Depends(auth.require)):
 
 @app.put("/api/settings")
 async def put_settings(request: Request, device=Depends(auth.require)):
-    data = await request.json()
+    data = await _json(request)
     with db.connect() as conn:
         _save_settings(conn, data)
         return _state(conn)
@@ -240,7 +274,7 @@ async def put_settings(request: Request, device=Depends(auth.require)):
 
 @app.post("/api/onboarding")
 async def onboarding(request: Request, device=Depends(auth.require)):
-    data = await request.json()
+    data = await _json(request)
     with db.connect() as conn:
         _save_settings(conn, data.get("settings", {}))
         s = db.get_settings(conn)
@@ -258,7 +292,7 @@ async def onboarding(request: Request, device=Depends(auth.require)):
 @app.post("/api/budget/preview")
 async def budget_preview(request: Request, device=Depends(auth.require)):
     """Budget für Onboarding und Ziele berechnen, ohne zu speichern."""
-    data = await request.json()
+    data = await _json(request)
     with db.connect() as conn:
         s = db.get_settings(conn)
     for key, value in (data or {}).items():
@@ -302,7 +336,7 @@ def food_get(food_id: int, device=Depends(auth.require)):
 
 @app.post("/api/foods")
 async def food_create(request: Request, device=Depends(auth.require)):
-    data = await request.json()
+    data = await _json(request)
     with db.connect() as conn:
         try:
             fid = foods.create_custom(conn, data)
@@ -313,7 +347,7 @@ async def food_create(request: Request, device=Depends(auth.require)):
 
 @app.put("/api/foods/{food_id}")
 async def food_update(food_id: int, request: Request, device=Depends(auth.require)):
-    data = await request.json()
+    data = await _json(request)
     with db.connect() as conn:
         try:
             foods.update_food(conn, food_id, data)
@@ -335,7 +369,7 @@ def recipe_get(food_id: int, device=Depends(auth.require)):
 
 @app.post("/api/recipes")
 async def recipe_create(request: Request, device=Depends(auth.require)):
-    data = await request.json()
+    data = await _json(request)
     with db.connect() as conn:
         try:
             fid = foods.save_recipe(conn, data)
@@ -347,7 +381,7 @@ async def recipe_create(request: Request, device=Depends(auth.require)):
 @app.post("/api/recipes/import")
 async def recipe_import_link(request: Request, device=Depends(auth.require)):
     """Rezept-Link → Vorschlag (Zutaten mit Treffern). Gespeichert wird erst über POST /api/recipes."""
-    data = await request.json()
+    data = await _json(request)
     url = _clean_text(data.get("url"), 500)
     m = re.search(r"https?://\S+", url)
     if not m:
@@ -372,7 +406,7 @@ async def recipe_import_link(request: Request, device=Depends(auth.require)):
 
 @app.put("/api/recipes/{food_id}")
 async def recipe_update(food_id: int, request: Request, device=Depends(auth.require)):
-    data = await request.json()
+    data = await _json(request)
     with db.connect() as conn:
         try:
             foods.save_recipe(conn, data, food_id)
@@ -388,7 +422,7 @@ async def ai_parse(request: Request, device=Depends(auth.require)):
     """Freitext → Vorschläge aus der eigenen Datenbank. Erfasst wird erst nach Bestätigung."""
     if not ai.available():
         raise HTTPException(503, "KI nicht eingerichtet (LiteLLM-Key fehlt)")
-    data = await request.json()
+    data = await _json(request)
     text = _clean_text(data.get("text"), 500)
     if len(text) < 3:
         raise HTTPException(400, "Bitte beschreiben, was du gegessen hast")
@@ -410,9 +444,7 @@ async def ai_label(request: Request, device=Depends(auth.require)):
     """Foto(s) einer Packung → Nährwerte je 100 g zum Vorausfüllen. Fotos werden nicht gespeichert."""
     if not ai.available():
         raise HTTPException(503, "KI nicht eingerichtet")
-    if int(request.headers.get("content-length") or 0) > 8_000_000:
-        raise HTTPException(413, "Foto zu groß")
-    data = await request.json()
+    data = await _json(request, MAX_LABEL_BYTES)
     images = [str(i) for i in list(data.get("images") or [])[:2]]
     if not images or not all(len(i) <= 3_500_000 and LABEL_IMAGE.match(i) for i in images):
         raise HTTPException(400, "Foto fehlt oder ungültig")
@@ -435,6 +467,8 @@ def food_delete(food_id: int, device=Depends(auth.require)):
 # ---------- Tagebuch ----------
 
 def _clean_entry(conn, data: dict) -> dict:
+    if not isinstance(data, dict):
+        raise HTTPException(400, "Eintrag als Objekt erwartet")
     meal = data.get("meal") if data.get("meal") in diary.MEALS else "snack"
     try:
         grams = float(data.get("grams"))
@@ -449,7 +483,10 @@ def _clean_entry(conn, data: dict) -> dict:
         except ValueError:
             raise HTTPException(400, "Zeit ungültig")
     day = _day(data["day"]) if data.get("day") else db.local_day(ts)
-    food = foods.get(conn, int(data["food_id"])) if data.get("food_id") else None
+    try:
+        food = foods.get(conn, int(data["food_id"])) if data.get("food_id") else None
+    except (TypeError, ValueError):
+        raise HTTPException(400, "Lebensmittel unbekannt")
     if not food:
         raise HTTPException(400, "Lebensmittel unbekannt")
     return {
@@ -477,7 +514,7 @@ def _upsert_entry(conn, e: dict) -> None:
 @app.post("/api/log")
 async def log_add(request: Request, device=Depends(auth.require)):
     """Ein Eintrag oder eine Liste (Offline-Warteschlange). Gleiche id = ändern."""
-    data = await request.json()
+    data = await _json(request, allow_list=True)
     items = data if isinstance(data, list) else [data]
     day = None
     with db.connect() as conn:
@@ -491,7 +528,7 @@ async def log_add(request: Request, device=Depends(auth.require)):
 @app.post("/api/log/copy")
 async def log_copy(request: Request, device=Depends(auth.require)):
     """Mahlzeit eines Tages (oder den ganzen Tag) auf einen anderen Tag kopieren."""
-    data = await request.json()
+    data = await _json(request)
     src, dst = _day(data.get("from")), _day(data.get("to"))
     meal = data.get("meal") if data.get("meal") in diary.MEALS else None
     with db.connect() as conn:
@@ -516,7 +553,7 @@ def log_delete(eid: str, device=Depends(auth.require)):
 
 @app.post("/api/body")
 async def body_add(request: Request, device=Depends(auth.require)):
-    data = await request.json()
+    data = await _json(request)
     kind = data.get("kind") if data.get("kind") in ("weight", "fat", "waist") else None
     if not kind:
         raise HTTPException(400, "kind ungültig")
@@ -558,7 +595,7 @@ def body_delete(bid: int, device=Depends(auth.require)):
 @app.post("/api/activity")
 async def activity_add(request: Request, device=Depends(auth.require)):
     """Schritte von Hand (wenn Health Connect fehlt)."""
-    data = await request.json()
+    data = await _json(request)
     day = _day(data.get("day") or db.today())
     try:
         steps = int(data.get("steps"))
@@ -594,19 +631,24 @@ def _clean_event(data: dict) -> dict:
             raise HTTPException(400, "Zeit ungültig")
     def num(k, lo, hi):
         v = data.get(k)
-        return max(lo, min(int(v), hi)) if v not in (None, "") else None
+        if v in (None, ""):
+            return None
+        try:
+            return max(lo, min(int(v), hi))
+        except (TypeError, ValueError):
+            raise HTTPException(400, f"{k} ungültig")
     return {"id": _clean_text(data.get("id"), 40) or str(uuid.uuid4()), "ts": db.iso(ts), "kind": "craving",
             "trigger": _clean_text(data.get("trigger"), 40) or None, "intensity": num("intensity", 1, 10),
             "resisted": None if data.get("resisted") is None else (1 if data["resisted"] else 0),
             "duration_s": num("duration_s", 0, 86400), "created": db.iso(db.now_utc()),
-            "food": data.get("food") if data.get("food") in swaps.KEYS else None,
+            "food": data["food"] if isinstance(data.get("food"), str) and data["food"] in swaps.KEYS else None,
             "swap": _clean_text(data.get("swap"), 40) or None}
 
 
 @app.post("/api/events")
 async def event_add(request: Request, device=Depends(auth.require)):
     """Heißhunger (SOS). Gleiche id = ändern."""
-    e = _clean_event(await request.json())
+    e = _clean_event(await _json(request))
     with db.connect() as conn:
         conn.execute(
             "INSERT INTO events (id, ts, kind, trigger, intensity, resisted, duration_s, created, food, swap) VALUES "
@@ -649,12 +691,11 @@ def challenge_skip(device=Depends(auth.require)):
 @app.post("/api/ingest/health")
 async def ingest_health(request: Request):
     """Webhook ohne Cookie: geprüft per HMAC-Signatur oder Bearer-Header."""
-    length = int(request.headers.get("content-length") or 0)
-    if length > MAX_INGEST_BYTES:
-        raise HTTPException(413, "zu groß")
-    raw = await request.body()
-    if len(raw) > MAX_INGEST_BYTES:
-        raise HTTPException(413, "zu groß")
+    # Vor dem Lesen bremsen: nach vielen Fehlversuchen und bei zu vielen parallelen Uploads
+    if ingest.too_many_denied() or INGEST_SLOTS.locked():
+        raise HTTPException(429, "zu viele Anfragen", headers={"Retry-After": "60"})
+    async with INGEST_SLOTS:
+        raw = await _read_body(request, MAX_INGEST_BYTES)
     with db.connect() as conn:
         secret = db.get_settings(conn).get("ingest_secret")
         reason = ingest.check(secret, raw, request.headers.get("x-signature"), request.headers.get("authorization"))
@@ -703,7 +744,7 @@ def ingest_pair(device=Depends(auth.require)):
 
 @app.post("/api/push/subscribe")
 async def push_subscribe(request: Request, device=Depends(auth.require)):
-    data = await request.json()
+    data = await _json(request)
     endpoint = str(data.get("endpoint", ""))
     keys = data.get("keys") or {}
     if not endpoint.startswith("https://") or not keys.get("p256dh") or not keys.get("auth"):
@@ -719,7 +760,7 @@ async def push_subscribe(request: Request, device=Depends(auth.require)):
 
 @app.post("/api/push/unsubscribe")
 async def push_unsubscribe(request: Request, device=Depends(auth.require)):
-    data = await request.json()
+    data = await _json(request)
     with db.connect() as conn:
         conn.execute("DELETE FROM push_subs WHERE endpoint = ?", (str(data.get("endpoint", "")),))
     return {"ok": True}
@@ -767,7 +808,7 @@ def pair_start(request: Request):
 async def pair_poll(request: Request, response: Response):
     if request.headers.get("x-fitpath") != "1":
         raise HTTPException(403, "Header fehlt")
-    data = await request.json()
+    data = await _json(request)
     with db.connect() as conn:
         status, session = auth.pair_poll(conn, str(data.get("rid") or ""))
     if session:
@@ -786,7 +827,7 @@ def pair_info(code: str, device=Depends(auth.require)):
 
 @app.post("/api/pair/{code}")
 async def pair_decide(code: str, request: Request, device=Depends(auth.require)):
-    data = await request.json()
+    data = await _json(request)
     with db.connect() as conn:
         if not auth.pair_decide(conn, code, bool(data.get("approve")), _clean_text(data.get("name"), 40)):
             raise HTTPException(404, "Code unbekannt oder abgelaufen")
@@ -795,7 +836,7 @@ async def pair_decide(code: str, request: Request, device=Depends(auth.require))
 
 @app.post("/api/devices/link")
 async def device_link(request: Request, device=Depends(auth.require)):
-    data = await request.json()
+    data = await _json(request)
     with db.connect() as conn:
         return {"url": auth.create_link(conn, _clean_text(data.get("name"), 40)),
                 "minutes": auth.LINK_MINUTES}
@@ -803,7 +844,7 @@ async def device_link(request: Request, device=Depends(auth.require)):
 
 @app.put("/api/devices/{did}")
 async def device_rename(did: int, request: Request, device=Depends(auth.require)):
-    data = await request.json()
+    data = await _json(request)
     name = _clean_text(data.get("name"), 40)
     if not name:
         raise HTTPException(400, "Name fehlt")

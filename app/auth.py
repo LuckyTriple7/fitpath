@@ -60,10 +60,10 @@ def peek(conn, token: str):
 
 def redeem(conn, token: str, user_agent: str):
     """Löst einen Link ein. Liefert das Session-Token oder None."""
-    row = conn.execute("SELECT * FROM link_tokens WHERE token_hash = ?", (_hash(token),)).fetchone()
+    # Löschen und Lesen in einem Schritt: zwei gleichzeitige Klicks bekommen nicht beide eine Session
+    row = conn.execute("DELETE FROM link_tokens WHERE token_hash = ? RETURNING name, expires", (_hash(token),)).fetchone()
     if not row:
         return None
-    conn.execute("DELETE FROM link_tokens WHERE token_hash = ?", (row["token_hash"],))
     if db.parse(row["expires"]) < db.now_utc():
         return None
     return _new_session(conn, row["name"] or _device_name(user_agent))
