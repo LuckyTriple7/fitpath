@@ -6,6 +6,8 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+## [0.15.0] – 2026-11-19
+
 ### Hinzugefügt
 - **Auswärts essen:** Neuer Tab **🍽️ Auswärts** beim Erfassen mit 38 fertigen Tellern in typischen Restaurant-Größen, von Döner und Currywurst über Gyros, Schnitzel und Pizza bis Bami Goreng und Sushi. Größe klein, normal oder groß. Die Teller sind aus BLS-Bausteinen zusammengesetzt, Pfannengerichte bekommen einen Fettzuschlag. Die Zusammensetzung ist einsehbar, die Teller finden sich auch über die Suche.
 
