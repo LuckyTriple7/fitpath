@@ -187,7 +187,7 @@ KI-Fehler werden inklusive Antworttext geloggt; der Service Worker cached `/` un
 
 ### Nachtrag v0.10.0: Foto-Endpunkt `/api/ai/label`
 
-Nicht im ursprünglichen Umfang. Befunde: Größenprüfung nur über `Content-Length`, Nicht-Objekt-JSON → 500 (beides behoben, Limit 8 MB über `_json()`). Kein Limit für KI-Aufrufe (nur mit gültiger Session ausnutzbar, offen). Die Fotos gehen an den KI-Anbieter hinter LiteLLM und werden in FitPath nicht gespeichert.
+Nicht im ursprünglichen Umfang. Befunde: Größenprüfung nur über `Content-Length`, Nicht-Objekt-JSON → 500 (beides behoben, Limit 8 MB über `_json()`). Kein Limit für KI-Aufrufe in der App: **akzeptiert**, nur mit gültiger Session ausnutzbar, Kosten und Rate begrenzt der virtuelle LiteLLM-Key (Budget, Rate-Limit). Die Fotos gehen an den KI-Anbieter hinter LiteLLM und werden in FitPath nicht gespeichert.
 
 ---
 
