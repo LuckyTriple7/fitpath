@@ -1,0 +1,4 @@
+# Nur für Tests und CI, nicht im Image. Dependabot hält auch diese Versionen aktuell.
+-r requirements.txt
+pytest==9.2.0
+pip-audit==2.10.1

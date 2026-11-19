@@ -85,8 +85,8 @@ def test_ssrf_blocks_cgnat_and_bad_addresses(monkeypatch):
 
 
 def test_ssrf_connects_to_checked_ip(monkeypatch):
-    """DNS-Rebinding: Nach der Prüfung darf httpx nicht neu auflösen, sondern muss die geprüfte IP nehmen."""
-    import httpx
+    """DNS-Rebinding: Nach der Prüfung darf httpx2 nicht neu auflösen, sondern muss die geprüfte IP nehmen."""
+    import httpx2
     answers = iter(["93.184.216.34", "127.0.0.1"])        # erste Auflösung öffentlich, zweite intern
     monkeypatch.setattr(socket, "getaddrinfo",
                         lambda host, port: [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (next(answers), 0))])
@@ -94,10 +94,10 @@ def test_ssrf_connects_to_checked_ip(monkeypatch):
 
     def handler(request):
         seen.update(host=request.url.host, header=request.headers["host"], sni=request.extensions.get("sni_hostname"))
-        return httpx.Response(200, text="<html></html>")
+        return httpx2.Response(200, text="<html></html>")
 
-    real = httpx.Client
-    monkeypatch.setattr(httpx, "Client", lambda **kw: real(transport=httpx.MockTransport(handler), **kw))
+    real = httpx2.Client
+    monkeypatch.setattr(httpx2, "Client", lambda **kw: real(transport=httpx2.MockTransport(handler), **kw))
     recipe_import.fetch("https://rezepte.example/kuchen")
     assert seen == {"host": "93.184.216.34", "header": "rezepte.example", "sni": "rezepte.example"}
 
@@ -169,19 +169,19 @@ def test_idle_sessions_expire():
 
 def test_no_info_leak_without_login(monkeypatch):
     import asyncio
-    import httpx
+    import httpx2
     c = client()
     assert "version" not in c.get("/healthz").json()
     assert "version" in c.get("/api/state").json()
     # KI-Fehler: der Antworttext (kann die Eingabe enthalten) landet nicht in der Meldung
-    resp = httpx.Response(400, json={"error": {"type": "invalid_request_error", "message": "Ich aß 3 Kekse"}})
+    resp = httpx2.Response(400, json={"error": {"type": "invalid_request_error", "message": "Ich aß 3 Kekse"}})
 
     class FakeClient:
         def __init__(self, **kw): pass
         async def __aenter__(self): return self
         async def __aexit__(self, *a): pass
         async def post(self, *a, **kw): return resp
-    monkeypatch.setattr(httpx, "AsyncClient", FakeClient)
+    monkeypatch.setattr(httpx2, "AsyncClient", FakeClient)
     with pytest.raises(RuntimeError) as exc:
         asyncio.run(ai._complete("s", "Ich aß 3 Kekse"))
     assert str(exc.value) == "LiteLLM 400 (invalid_request_error)"

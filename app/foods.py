@@ -16,7 +16,7 @@ import re
 import threading
 import time
 
-import httpx
+import httpx2
 
 from . import __version__, db, points
 
@@ -510,9 +510,9 @@ def barcode(conn, code: str) -> dict:
         return {"status": "busy"}
     ua = f"FitPath/{__version__}" + (f" ({OFF_CONTACT})" if OFF_CONTACT else "")
     try:
-        r = httpx.get(OFF_URL.format(code=code), params={"fields": OFF_FIELDS},
+        r = httpx2.get(OFF_URL.format(code=code), params={"fields": OFF_FIELDS},
                       headers={"User-Agent": ua}, timeout=8)
-    except httpx.HTTPError as exc:
+    except httpx2.HTTPError as exc:
         print(f"Open Food Facts nicht erreichbar: {exc}", flush=True)
         return {"status": "offline"}
     if r.status_code == 404:

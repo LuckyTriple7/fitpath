@@ -16,7 +16,7 @@ import re
 import socket
 from urllib.parse import urljoin, urlparse
 
-import httpx
+import httpx2
 
 from . import __version__, foods
 
@@ -101,14 +101,14 @@ def fetch(url: str) -> tuple[str, str]:
         ip = _public_ip(u.hostname)
         if ip is None:
             raise ImportError_("Die Adresse ist nicht öffentlich erreichbar")
-        # Direkt zur geprüften IP verbinden, sonst löst httpx neu auf und ein DNS-Rebinding
+        # Direkt zur geprüften IP verbinden, sonst löst httpx2 neu auf und ein DNS-Rebinding
         # könnte auf eine interne Adresse umlenken. Host-Header und TLS (SNI, Zertifikat) bleiben beim Namen.
         host = f"[{ip}]" if ip.version == 6 else str(ip)
         target = u._replace(netloc=host + (f":{u.port}" if u.port else "")).geturl()
         headers = {"Host": u.netloc.rsplit("@", 1)[-1], "User-Agent": UA,
                    "Accept-Language": "de-DE,de;q=0.9,en;q=0.5", "Accept": "text/html,application/xhtml+xml"}
         ext = {"sni_hostname": u.hostname} if u.scheme == "https" else {}
-        with httpx.Client(timeout=12, follow_redirects=False) as client:
+        with httpx2.Client(timeout=12, follow_redirects=False) as client:
             with client.stream("GET", target, headers=headers, extensions=ext) as r:
                 if r.status_code in (301, 302, 303, 307, 308) and r.headers.get("location"):
                     url = urljoin(url, r.headers["location"])

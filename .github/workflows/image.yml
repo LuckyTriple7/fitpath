@@ -21,11 +21,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Python-Version aus dem Dockerfile, damit getestet wird, was auch im Image läuft
+      # (ein Dependabot-PR für ein neues Basisimage testet so automatisch die neue Version)
+      - id: py
+        run: |
+          v=$(sed -nE 's/^FROM python:([0-9]+\.[0-9]+).*/\1/p' Dockerfile)
+          [ -n "$v" ] || { echo "Python-Version im Dockerfile nicht gefunden"; exit 1; }
+          echo "version=$v" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: "3.13"
+          python-version: ${{ steps.py.outputs.version }}
           cache: pip
-      - run: pip install -r requirements.txt pytest pip-audit==2.10.1
+      - run: pip install -r requirements-dev.txt
       - run: python -m pytest -q tests
       - name: Bekannte Sicherheitslücken in den Abhängigkeiten
         run: pip-audit -r requirements.txt

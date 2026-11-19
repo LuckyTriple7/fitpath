@@ -17,7 +17,7 @@ import json
 import os
 import re
 
-import httpx
+import httpx2
 
 from . import diary, foods
 
@@ -104,7 +104,7 @@ def available() -> bool:
 
 async def _complete(system: str, user, max_tokens: int = 700) -> str:
     """user: Text oder OpenAI-Inhaltsliste (Text und Bilder)."""
-    async with httpx.AsyncClient(timeout=httpx.Timeout(45, connect=10)) as client:
+    async with httpx2.AsyncClient(timeout=httpx2.Timeout(45, connect=10)) as client:
         resp = await client.post(
             CHAT_URL, headers=HEADERS,
             # keine temperature: claude-sonnet-5-5 lehnt Werte ≠ 1 ab

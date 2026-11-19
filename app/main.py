@@ -9,7 +9,7 @@ import uuid
 from contextlib import asynccontextmanager
 from datetime import timedelta
 
-import httpx
+import httpx2
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 
@@ -393,7 +393,7 @@ async def recipe_import_link(request: Request, device=Depends(auth.require)):
         parsed = recipe_import.parse_recipe(page)
     except recipe_import.ImportError_ as exc:
         raise HTTPException(400, str(exc))
-    except httpx.HTTPError:
+    except httpx2.HTTPError:
         raise HTTPException(502, "Seite nicht erreichbar")
     terms = None
     if ai.available():
