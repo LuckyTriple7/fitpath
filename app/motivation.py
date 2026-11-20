@@ -6,15 +6,16 @@ an dem ein Abzeichen zum ersten Mal erreicht wurde (`unlocked`), geschaffte Chal
 Abzeichen bleibt, auch wenn z. B. das Gewicht später wieder steigt.
 
 Erfahrungspunkte (XP):
-  erfasster Tag 10 · Tag im Budget 10 · Schrittziel erreicht 10 · gewogen 5 ·
+  erfasster Tag 10 · Tag im Budget 10 · Schrittziel erreicht 10 · Trainingstag 10 · gewogen 5 ·
   Heißhunger überstanden 15 · Abzeichen 50 · Wochen-Challenge 50
+Trainingstag: mindestens training.TRAIN_DAY_MINUTES Minuten Training (Spazieren zählt über die Schritte).
 """
 
 from datetime import date, timedelta
 
-from . import body, db, diary, points
+from . import body, db, diary, points, training
 
-XP = {"logged": 10, "budget": 10, "steps": 10, "weigh": 5, "resisted": 15, "badge": 50, "challenge": 50}
+XP = {"logged": 10, "budget": 10, "steps": 10, "train": 10, "weigh": 5, "resisted": 15, "badge": 50, "challenge": 50}
 
 LEVELS = [
     (0, "Erster Schritt"), (100, "Losgelaufen"), (250, "Spaziergänger"), (500, "Wanderer"),
@@ -33,6 +34,9 @@ BADGES = [
     ("steps1", "👟", "Schrittziel erreicht", "steps_goal_days", 1),
     ("steps10", "👟", "10× Schrittziel", "steps_goal_days", 10),
     ("steps20k", "🚀", "20.000 Schritte an einem Tag", "max_steps", 20000),
+    ("train1", "💪", "Erstes Training", "train_days", 1),
+    ("train10", "🏋️", "10 Trainingstage", "train_days", 10),
+    ("swim5", "🏊", "5× schwimmen", "swim_days", 5),
     ("weigh10", "⚖️", "10× gewogen", "weigh_days", 10),
     ("loss2", "📉", "−2 % Gewicht", "loss_pct", 2),
     ("loss5", "❤️", "−5 % Gewicht", "loss_pct", 5),
@@ -97,6 +101,7 @@ def day_data(conn, s: dict, first: date, last: date) -> dict:
         out[k] = {"entries": t.get("entries", 0), "meals": t.get("meals", 0), "points": t.get("points", 0),
                   "protein": t.get("protein", 0.0), "fiber": t.get("fiber", 0.0), "zero": zero.get(k, 0),
                   "steps": a.get("steps") or 0, "act_points": a.get("act_points", 0),
+                  "train": (a.get("train_minutes") or 0) >= training.TRAIN_DAY_MINUTES, "swim": bool(a.get("swim")),
                   "weighed": k in weighed, "resisted": resisted.get(k, 0)}
     return {"days": out, "budget": b}
 
@@ -145,6 +150,8 @@ def summary(conn, s: dict, today: date | None = None) -> dict:
         "budget_days": sum(1 for k in past if _in_budget(days[k], b["points"])),
         "steps_goal_days": sum(1 for k in keys if days[k]["steps"] >= goal),
         "max_steps": max((days[k]["steps"] for k in keys), default=0),
+        "train_days": sum(1 for k in keys if days[k]["train"]),
+        "swim_days": sum(1 for k in keys if days[k]["swim"]),
         "weigh_days": sum(1 for k in keys if days[k]["weighed"]),
         "loss_pct": round((start_w - trend) / start_w * 100, 1) if start_w and trend else 0,
         "goal_reached": 1 if trend and bs.get("goal") and trend <= bs["goal"] else 0,
@@ -244,6 +251,7 @@ def state(conn, s: dict) -> dict:
         ("Erfasste Tage", sm["logged_days"], XP["logged"]),
         ("Tage im Budget", sm["budget_days"], XP["budget"]),
         ("Schrittziel erreicht", sm["steps_goal_days"], XP["steps"]),
+        ("Trainingstage", sm["train_days"], XP["train"]),
         ("Gewogen", sm["weigh_days"], XP["weigh"]),
         ("Heißhunger überstanden", sm["resisted"], XP["resisted"]),
         ("Abzeichen", len(unlocked), XP["badge"]),

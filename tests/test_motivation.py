@@ -95,7 +95,8 @@ def test_craving_events_and_stats():
     assert c.post("/api/events", headers=H, json={"kind": "quatsch"}).status_code == 400
     st = c.get("/api/stats?days=7").json()["cravings"]
     assert st["total"] == 3 and st["resisted"] == 2 and st["triggers"][0]["trigger"] == "Stress"
-    assert c.get("/api/state").json()["motivation"]["xp"]["parts"][4]["count"] == 2
+    parts = c.get("/api/state").json()["motivation"]["xp"]["parts"]
+    assert next(x for x in parts if x["label"] == "Heißhunger überstanden")["count"] == 2
     ev = c.get("/api/events").json()
     c.delete(f"/api/events/{ev[0]['id']}", headers=H)
     assert len(c.get("/api/events").json()) == 2

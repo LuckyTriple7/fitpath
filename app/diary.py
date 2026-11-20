@@ -2,7 +2,7 @@
 
 from datetime import date, timedelta
 
-from . import body, db, points
+from . import body, db, points, training
 
 MEALS = ("fruehstueck", "mittag", "abend", "snack")
 
@@ -41,16 +41,26 @@ def totals(conn, first: str, last: str) -> dict:
 
 
 def activity(conn, first: str, last: str, weight: float, baseline: int) -> dict:
-    """{Tag: {steps, active_kcal, act_points, act_kcal, source}} – je Tag der höchste Schrittwert aller Quellen."""
-    out = {}
+    """{Tag: {steps, active_kcal, source, act_points, act_kcal, step_kcal, train_kcal, workouts, …}}.
+    Schritte: je Tag der höchste Wert aller Quellen. Aktivitätspunkte = Schritte + Training (training.py)."""
+    rows = {}
     for r in conn.execute("SELECT * FROM activity WHERE day BETWEEN ? AND ? ORDER BY day", (first, last)):
-        cur = out.get(r["day"])
-        if cur and (cur["steps"] or 0) >= (r["steps"] or 0):
-            continue
-        bonus = points.activity_bonus(r["steps"], weight, baseline)
-        out[r["day"]] = {"steps": r["steps"], "active_kcal": r["active_kcal"], "source": r["source"],
-                         "updated": r["updated"], "act_points": bonus["points"], "act_kcal": bonus["kcal"],
-                         "extra_steps": bonus["extra_steps"]}
+        cur = rows.get(r["day"])
+        if not cur or (cur["steps"] or 0) < (r["steps"] or 0):
+            rows[r["day"]] = r
+    workouts = training.by_day(conn, first, last)
+    out = {}
+    for day in sorted(set(rows) | set(workouts)):
+        r = rows.get(day)
+        steps = r["steps"] if r else None
+        bonus = points.activity_bonus(steps, weight, baseline)
+        tr = training.day_credit(workouts.get(day, []), weight, bonus["extra_steps"])
+        credited = bonus["kcal_raw"] + tr["kcal"]
+        out[day] = {"steps": steps, "active_kcal": r["active_kcal"] if r else None, "source": r["source"] if r else None,
+                    "updated": r["updated"] if r else None, "extra_steps": bonus["extra_steps"],
+                    "act_points": points.round_points(credited / points.KCAL_PER_POINT), "act_kcal": round(credited),
+                    "step_kcal": bonus["kcal"], "train_kcal": round(tr["kcal"]), "train_capped": tr["capped"],
+                    "train_minutes": tr["train_minutes"], "swim": tr["swim"], "workouts": tr["workouts"]}
     return out
 
 
@@ -110,6 +120,7 @@ def history(conn, s: dict, days: int) -> dict:
             "protein": round(t.get("protein", 0)), "fat": round(t.get("fat", 0)), "carbs": round(t.get("carbs", 0)),
             "fiber": round(t.get("fiber", 0), 1), "sugar": round(t.get("sugar", 0)),
             "steps": a.get("steps"), "act_points": a.get("act_points", 0), "act_kcal": a.get("act_kcal", 0),
+            "train_kcal": a.get("train_kcal", 0), "train_minutes": a.get("train_minutes", 0),
         })
         d += timedelta(days=1)
     logged = [x for x in series if x["entries"] and x["day"] != today.isoformat()]

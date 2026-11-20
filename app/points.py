@@ -156,7 +156,7 @@ def activity_bonus(steps, weight: float, baseline: int) -> dict:
     extra = max(0, int(steps or 0) - int(baseline or 0))
     estimate = extra * weight * KCAL_PER_STEP_PER_KG
     credited = estimate * ACTIVITY_CREDIT
-    return {"extra_steps": extra, "kcal_estimate": round(estimate), "kcal": round(credited),
+    return {"extra_steps": extra, "kcal_estimate": round(estimate), "kcal": round(credited), "kcal_raw": credited,
             "points": round_points(credited / KCAL_PER_POINT)}
 
 

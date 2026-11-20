@@ -24,7 +24,7 @@ import time
 from datetime import timedelta
 from urllib.parse import quote, urlencode
 
-from . import db
+from . import db, training
 
 KEEP_DAYS = 14
 DENY_PER_MINUTE = 20        # abgelehnte Anfragen, danach 429 ohne den Body zu lesen
@@ -143,7 +143,7 @@ def apply(conn, payload: dict, raw: bytes | None = None) -> dict:
         return {"ok": True, "duplicate": True}
 
     now = db.iso(db.now_utc())
-    summary = {"days": 0, "weight": 0, "body_fat": 0, "deleted": 0}
+    summary = {"days": 0, "weight": 0, "body_fat": 0, "exercise": 0, "deleted": 0}
 
     # Tagessummen: nur übernehmen, wenn die Lieferung neuer ist als die gespeicherte
     for t in payload.get("daily_totals") or []:
@@ -187,7 +187,12 @@ def apply(conn, payload: dict, raw: bytes | None = None) -> dict:
                 (db.iso(ts), db.local_day(ts), kind, round(value, 2), str(rec["uuid"])[:80]))
             summary[key] += 1
 
+    # Trainingseinheiten (Schlüssel ist die uuid aus Health Connect)
+    summary["exercise"] = training.ingest(conn, payload.get("exercise"))
+
     for d in payload.get("deleted_records") or []:
+        if isinstance(d, dict) and d.get("type") == "exercise" and d.get("uuid"):
+            summary["deleted"] += training.remove_hc(conn, d["uuid"])
         if isinstance(d, dict) and d.get("type") in BODY_KINDS and d.get("uuid"):
             n = conn.execute("DELETE FROM body WHERE kind = ? AND ext_id = ?",
                              (BODY_KINDS[d["type"]][0], str(d["uuid"])[:80])).rowcount

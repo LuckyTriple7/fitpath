@@ -1,6 +1,6 @@
 # FitPath
 
-Persönliche Abnehm-App als PWA für eine Person, selbst gehostet mit Docker. Statt reinem Kalorienzählen gibt es ein eigenes Punktesystem (umschaltbar auf kcal). Schritte, Gewicht und Körperfett kommen automatisch aus Health Connect.
+Persönliche Abnehm-App als PWA für eine Person, selbst gehostet mit Docker. Statt reinem Kalorienzählen gibt es ein eigenes Punktesystem (umschaltbar auf kcal). Schritte, Training, Gewicht und Körperfett kommen automatisch aus Health Connect.
 
 
 ## Installation
@@ -67,19 +67,20 @@ git push --follow-tags            # GitHub testet, prüft Tag = Version, baut da
 
 | Bereich | Inhalt |
 |---|---|
-| Heute | Ring mit übrigen Punkten (oder kcal), Budget, Aktivitätspunkte, Wochenreserve, Wochenleiste Mo–So, Mahlzeiten (Frühstück, Mittag, Abend, Snacks), „Nochmal“-Leiste (ein Tipp erfasst die zuletzt gegessene Menge), Wochen-Challenge, Level, Schritte, Trendgewicht, Tage vor und zurück. Oben neben dem Logo steht die Version |
+| Heute | Ring mit übrigen Punkten (oder kcal), Budget, Aktivitätspunkte, Wochenreserve, Wochenleiste Mo–So, Mahlzeiten (Frühstück, Mittag, Abend, Snacks), „Nochmal“-Leiste (ein Tipp erfasst die zuletzt gegessene Menge), Wochen-Challenge, Level, Schritte und Training, Trendgewicht, Tage vor und zurück. Oben neben dem Logo steht die Version |
 | Erfassen | Suche in rund 7.140 BLS-Lebensmitteln plus eigenen, Listen „Zuletzt“, „Favoriten“, „Eigene“, „Auswärts“, Barcode per Kamera (`BarcodeDetector` in Chrome für Android, sonst Zahl eintippen), unbekannte Produkte per Foto der Nährwerttabelle (KI füllt das Formular vor), Portionen (Scheibe, Stück, Glas …) mit Anzahl, Live-Vorschau mit Erklärung der Punkte, eigene Portionen merken, 0-Punkte-Schalter je Lebensmittel |
 | Eigene Lebensmittel | Nährwerte je 100 g von der Packung, optional mit Barcode; unbekannte Barcodes landen direkt im Formular |
-| Wie gestern | Leere Mahlzeit zeigt „Gestern: …“ mit Knopf **↺ Wie gestern**: übernimmt alle Einträge dieser Mahlzeit vom Vortag, mit „Rückgängig“ |
+| Wie gestern | Leere Mahlzeit zeigt „Gestern: …“ und neben dem + einen Knopf **↺**. Er öffnet ein Fenster mit den Einträgen dieser Mahlzeit vom Vortag; mit ✕ rausnehmen, was nicht nochmal soll, der Rest wird übernommen (mit „Rückgängig“). Der Vortag bleibt unverändert |
+| Training | Karte „Schritte“ auf Heute: **＋ Training** mit 15 Sportarten (Schwimmen, Rad, Laufen, Kraft, Yoga …), Dauer und Intensität (leicht, mittel, hart), Vorschau der Punkte. Einheiten von der Uhr kommen über Health Connect, Sportart und Intensität lassen sich ändern, Löschen blendet sie aus. Rechnung siehe [Punktesystem](#punktesystem) |
 | Gerichte | Aus Zutaten (Suche, Gramm je Zutat) oder per **Rezept-Link** (Cookidoo, Chefkoch und andere Seiten mit schema.org-Rezeptdaten), Portionen, optional Gewicht nach dem Kochen; erscheint in Suche und unter „Eigene“ und wird wie ein Lebensmittel erfasst. 0-Punkte-Zutaten bleiben 0 Punkte |
 | Auswärts | Tab **🍽️ Auswärts** im Erfassen-Blatt: 38 fertige Teller in typischen Restaurant-Größen (Imbiss, Pizza, Griechisch, Deutsch, Italienisch, Asiatisch, Salat), z. B. Döner, Gyros mit Pommes, Schnitzel Wiener Art, Pizza Margherita, Bami Goreng. Größe klein/normal/groß (75/100/130 %), vorgewählt ist normal. Zusammengesetzt aus BLS-Bausteinen (wo der BLS das ganze Gericht kennt, direkt dieses), Pfannengerichte mit 10–15 g Fettzuschlag, weil Restaurants fetter kochen; die Zusammensetzung steht unter „Mehr zu diesem Lebensmittel“. Auch über die Suche zu finden. Die Liste steht in `app/eatout.py` |
 | Per Text (KI) | ✨ im Erfassen-Blatt: „2 Brötchen mit Butter und Gouda, Kaffee mit Milch“ → KI zerlegt in Lebensmittel mit Menge, FitPath schlägt je Posten 5 Treffer aus der eigenen DB vor; Auswahl, Gramm und Mahlzeit änderbar, erfasst wird erst nach Bestätigung |
 | Gewicht | Trendgewicht (geglättet), Tempo kg/Woche, Ziel mit Meilensteinen (−5 %, −10 %), BMI mit WHO-Skala, Verlauf und BMI beim Zielgewicht, Verlauf 30/90/365 Tage, Körperfett und Bauchumfang |
-| Motivation | Level und Erfahrungspunkte, 16 Abzeichen (Tage in Folge, Tage im Budget, Schrittziel, −2/−5/−10 %, Zielgewicht …), Wochen-Challenge mit automatischer Zählung und „Andere“, Konfetti bei neuem Abzeichen, Level oder geschaffter Challenge; Übersicht unter **Erfolge** (Mehr → Wenn-Dann-Pläne → 🏅 oder Level-Karte auf Heute) |
+| Motivation | Level und Erfahrungspunkte, 19 Abzeichen (Tage in Folge, Tage im Budget, Schrittziel, Training, Schwimmen, −2/−5/−10 %, Zielgewicht …), Wochen-Challenge mit automatischer Zählung und „Andere“, Konfetti bei neuem Abzeichen, Level oder geschaffter Challenge; Übersicht unter **Erfolge** (Mehr → Wenn-Dann-Pläne → 🏅 oder Level-Karte auf Heute) |
 | Heißhunger-SOS | Knopf **🍫 SOS** oben: Auslöser wählen, Stärke, eigener Wenn-Dann-Plan, 10-Minuten-Timer mit Tipps, „Geschafft“ (+15 XP), „Doch gegessen“ (öffnet das Erfassen mit passender Suche) oder „Abbrechen“ (nichts gespeichert); Pläne und Auslöser unter **Mehr → Wenn-Dann-Pläne** |
 | Lieber-Tausch | Im SOS „Worauf hast du Lust?“ (Schokolade, Chips, Eis, Gummibärchen, Kekse, Cola/Limo): 3–4 günstigere Alternativen mit Punkten aus dem BLS, z. B. bei Schokolade Bitterschokolade, Schoko-Quark, heißer Kakao oder Banane mit Kakao. Antippen erfasst den Tausch als Snack und zählt als überstanden (+15 XP); oft gewählte stehen oben. Dazu „Bewusst genießen“: kleine Menge des Originals mit Hinweis, ob sie heute ins Budget passt. Die Liste steht in `app/swaps.py` |
 | Statistik | Echter Bedarf aus Einträgen und Gewicht (siehe [Punktesystem](#punktesystem)), Punkte oder kcal pro Tag gegen Budget, Tage im Budget, Ø Eiweiß/Ballaststoffe mit Richtwert, Energiedichte-Ampel, Heißhunger (überstanden, Auslöser, worauf Lust und wie oft getauscht, typische Uhrzeiten), größte Punkte-Lieferanten, Schritte |
-| Health Connect | Webhook für Life Dashboard Companion: Schritte (Tagessummen), Gewicht, Körperfett, Löschungen, Verlauf nachladen |
+| Health Connect | Webhook für Life Dashboard Companion: Schritte (Tagessummen), Trainingseinheiten, Gewicht, Körperfett, Löschungen, Verlauf nachladen |
 | Push | Wiegen (Wochentage wählbar), „noch nichts erfasst“ am Mittag, etwa 15 Minuten vor typischen Snack-Uhrzeiten (gelernt aus Snack-Einträgen und Heißhunger der letzten 3 Wochen, ab 3 Tagen je Stunde), Abend-Check; Ruhezeiten und Höchstzahl pro Tag |
 | Offline | App-Hülle und letzter Zustand aus dem Cache, Einträge warten in einer Warteschlange |
 
@@ -111,6 +112,7 @@ nicht unter 0, auf ganze Punkte gerundet. Beispiele: Croissant 60 g ≈ 9, Cola 
 - **Tagesbudget** = (kcal-Ziel − 200) ÷ 40. Satt machende Kost bringt etwa 45–50 kcal je Punkt, typische Mischkost gut 30; mit 40 bleibt bei guter Auswahl ein Defizit.
 - **Wochenreserve**: Von jedem vergangenen Tag der Woche mit Einträgen wandern bis zu 4 ungenutzte Punkte (bzw. 140 kcal) in die Reserve, ein überzogener Tag zieht ab. Tage ohne Eintrag zählen nicht. Montag beginnt neu.
 - **Aktivität**: Schritte über der Grundlinie (Standard 5.000) × Gewicht × 0,0005 kcal, davon 50 % gutgeschrieben. Die aktiven kcal aus Health Connect werden gespeichert, aber nicht verrechnet (zu unzuverlässig).
+- **Training** (`app/training.py`): (MET − 1) × Gewicht × Stunden, also nur der Verbrauch über Ruhe, davon 50 % gutgeschrieben, höchstens 15 Punkte am Tag. MET je Sportart und Intensität gerundet nach dem Compendium of Physical Activities (2024), z. B. Schwimmen 4,8 / 5,8 / 9,8. Keine Doppelzählung mit den Schritten: Bei Gehen, Laufen und Wandern werden die Schritte der Einheit geschätzt (100 bzw. 160 je Minute) und abgezogen, soweit der Schrittbonus sie an dem Tag schon gutgeschrieben hat. Spazieren zählt deshalb praktisch nur über die Schritte. Überlappen sich zwei Einheiten aus Health Connect zu mindestens der Hälfte (zwei Apps haben dieselbe geschrieben), zählt nur die erste. Trainingstag (+10 XP): mindestens 20 Minuten Training ohne Spazieren.
 
 Gerichte speichern zusätzlich Rohpunkte je 100 g (`foods.pts_100`), berechnet ohne 0-Punkte-Zutaten; ein Eintrag übernimmt sie als `food_log.points_raw`. Wird ein Gericht später geändert, bleiben schon erfasste Einträge wie sie waren.
 
@@ -139,14 +141,14 @@ Die Suche läuft im Speicher, nicht per Datenbank-Volltext: Deutsche Komposita t
 
 Schritte, Gewicht und Körperfett schickt die Android-App **Life Dashboard Companion** (F-Droid, MIT, Repo `owen282000/life-dashboard-companion-app`) direkt an FitPath, ohne Home Assistant.
 
-1. In Life Dashboard Health-Connect-Zugriff für Schritte, Gewicht, Körperfett, aktive Kalorien erlauben.
+1. In Life Dashboard Health-Connect-Zugriff für Schritte, Training (Exercise), Gewicht, Körperfett, aktive Kalorien erlauben.
 2. In FitPath **Mehr → Health Connect → Einrichten** (später **Koppeln**). Am PC erscheint ein QR-Code: mit der Handy-Kamera oder in Life Dashboard unter **Add destination → Scan a pairing code** scannen. Ist FitPath auf dem Handy offen, öffnet **In Life Dashboard öffnen** die Kopplung direkt. Dort **Pair** tippen.
 3. Life Dashboard schickt sofort einen signierten Test-Ping; in FitPath steht „Test empfangen“. **Send history** lädt die Vergangenheit nach.
 4. **Daily totals in payload** anlassen (Standard), Intervall 15 Minuten.
 
 Das Geheimnis (43 Zeichen) von Hand abzutippen geht unter **Von Hand eintragen**, ist aber fehleranfällig (falsches Zeichen = 401). Der Koppel-Link folgt `docs/pairing.md` von Life Dashboard (`https://owen282000.github.io/life-dashboard-companion-app/pair#v=1&url=…&secret=…`, alles im Fragment, das nie an einen Server geht); der QR-Code entsteht serverseitig mit `segno`. Abgelehnte Lieferungen landen mit Grund (keine Signatur, Signatur passt nicht, kein Geheimnis eingerichtet) in `ingest_log` und unter **Letzte Lieferungen**; die 401-Antwort nennt den Grund ebenfalls.
 
-Technik (`app/ingest.py`): Signatur `X-Signature: sha256=<HMAC-SHA256>` über den rohen Body; alternativ `Authorization: Bearer <Geheimnis>` als eigener Header. Schritte kommen aus `daily_totals` (Aggregat-API von Health Connect, keine Doppelzählung von Handy und Uhr); für ein Datum gilt die Lieferung mit der höchsten `sequence`, eine schon verarbeitete `sequence` wird übersprungen. `weight` und `body_fat` werden über ihre `uuid` gespeichert, `deleted_records` entfernt sie wieder. Die letzten Lieferungen (14 Tage, Rohdaten gekürzt auf 32 KB) stehen in der Tabelle `ingest_log` und unter **Mehr → Health Connect → Letzte Lieferungen**.
+Technik (`app/ingest.py`): Signatur `X-Signature: sha256=<HMAC-SHA256>` über den rohen Body; alternativ `Authorization: Bearer <Geheimnis>` als eigener Header. Schritte kommen aus `daily_totals` (Aggregat-API von Health Connect, keine Doppelzählung von Handy und Uhr); für ein Datum gilt die Lieferung mit der höchsten `sequence`, eine schon verarbeitete `sequence` wird übersprungen. `weight` und `body_fat` werden über ihre `uuid` gespeichert, `deleted_records` entfernt sie wieder. Trainingseinheiten kommen aus `exercise` (Sportart über `name`, sonst die Typnummer; Dauer aus `duration_seconds`, unter 3 Minuten wird ignoriert) und werden über ihre `uuid` in der Tabelle `workouts` gespeichert. Die letzten Lieferungen (14 Tage, Rohdaten gekürzt auf 32 KB) stehen in der Tabelle `ingest_log` und unter **Mehr → Health Connect → Letzte Lieferungen**.
 
 Größe: Eine Lieferung kann einige MB haben (vor allem beim Nachladen der Vergangenheit). FitPath nimmt bis 12 MB an. Zeigt das Zustellprotokoll der App `413`, im Reverse Proxy die erlaubte Größe erhöhen (z. B. `client_max_body_size 16m;`).
 
@@ -185,6 +187,7 @@ Uhrzeiten und Zahlen gibt die App unabhängig von der Browsersprache ein: Uhrzei
 | `app/main.py` | FastAPI: Routen, Validierung, Sicherheits-Header (CSP, Kamera nur für die eigene Seite) |
 | `app/db.py` | SQLite-Schema, Einstellungen, Zeitfunktionen |
 | `app/points.py` | Punkte-Formel, 0-Punkte-Regeln, kcal-Ziel, Budget, Aktivität, Wochenreserve |
+| `app/training.py` | Sportarten mit MET, Zuordnung der Health-Connect-Typen, Trainingspunkte, doppelte Einheiten |
 | `app/foods.py` | BLS-Import, Suche, Portionen, eigene Lebensmittel, Open-Food-Facts-Barcodes |
 | `app/diary.py` | Tagessummen, Übersicht „Heute“, Verlauf für die Statistik |
 | `app/body.py` | Trendgewicht, Tempo, Meilensteine |

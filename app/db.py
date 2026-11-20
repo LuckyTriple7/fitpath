@@ -77,6 +77,23 @@ CREATE TABLE IF NOT EXISTS activity (
     PRIMARY KEY (day, source)
 );
 
+CREATE TABLE IF NOT EXISTS workouts (
+    id TEXT PRIMARY KEY,               -- UUID (von Hand) oder hc:<uuid aus Health Connect>
+    start TEXT NOT NULL,               -- UTC; bei Hand-Einträgen ungefähr
+    day TEXT NOT NULL,
+    minutes REAL NOT NULL,
+    kind TEXT NOT NULL,                -- Schlüssel aus training.SPORTS
+    intensity TEXT NOT NULL DEFAULT 'mittel',   -- leicht | mittel | hart
+    source TEXT NOT NULL,              -- manual | hc
+    hc_type TEXT,                      -- Name oder Nummer des Typs in Health Connect
+    title TEXT,
+    app TEXT,                          -- App, die die Einheit nach Health Connect geschrieben hat
+    edited INTEGER NOT NULL DEFAULT 0, -- Sportart von Hand geändert: Lieferungen überschreiben sie nicht
+    hidden INTEGER NOT NULL DEFAULT 0, -- Einheit aus Health Connect in FitPath gelöscht
+    updated TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS workouts_day ON workouts (day);
+
 CREATE TABLE IF NOT EXISTS ingest_log (
     id INTEGER PRIMARY KEY, ts TEXT NOT NULL, seq INTEGER, kind TEXT NOT NULL,
     summary TEXT, raw TEXT);

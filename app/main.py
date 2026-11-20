@@ -5,6 +5,7 @@ import html
 import json
 import os
 import re
+import sqlite3
 import uuid
 from contextlib import asynccontextmanager
 from datetime import timedelta
@@ -13,7 +14,7 @@ import httpx2
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 
-from . import __version__, adaptive, ai, auth, eatout, backup, body, db, diary, foods, ingest, motivation, points, push, recipe_import, swaps
+from . import __version__, adaptive, ai, auth, eatout, backup, body, db, diary, foods, ingest, motivation, points, push, recipe_import, swaps, training
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 MAX_INGEST_BYTES = 12 * 1024 * 1024
@@ -251,6 +252,7 @@ def _state(conn, day: str | None = None) -> dict:
         "recent": foods.recent(conn, 12),
         "vapid_key": push.public_key(),
         "activity_levels": points.ACTIVITY_LEVELS,
+        "training": training.catalog(),
         "ai": ai.available(),
         "version": __version__,
         "server_time": db.iso(db.now_utc()),
@@ -620,6 +622,44 @@ async def activity_add(request: Request, device=Depends(auth.require)):
         return _state(conn, day)
 
 
+@app.post("/api/workouts")
+async def workout_add(request: Request, device=Depends(auth.require)):
+    """Training von Hand eintragen."""
+    data = await _json(request)
+    day = _day(data.get("day") or db.today())
+    with db.connect() as conn:
+        try:
+            training.add_manual(conn, data, day)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from None
+        except sqlite3.IntegrityError:
+            raise HTTPException(409, "Schon gespeichert") from None
+        return _state(conn, day)
+
+
+@app.put("/api/workouts/{wid}")
+async def workout_put(wid: str, request: Request, device=Depends(auth.require)):
+    """Sportart, Intensität und (nur bei Hand-Einträgen) Dauer ändern."""
+    data = await _json(request)
+    with db.connect() as conn:
+        try:
+            day = training.update(conn, wid, data)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from None
+        if day is None:
+            raise HTTPException(404, "Training nicht gefunden")
+        return _state(conn, day)
+
+
+@app.delete("/api/workouts/{wid}")
+def workout_delete(wid: str, device=Depends(auth.require)):
+    with db.connect() as conn:
+        day = training.delete(conn, wid)
+        if day is None:
+            raise HTTPException(404, "Training nicht gefunden")
+        return _state(conn, day)
+
+
 @app.get("/api/stats")
 def stats(days: int = 30, device=Depends(auth.require)):
     with db.connect() as conn:
@@ -894,6 +934,7 @@ def export(device=Depends(auth.require)):
             "food_log": [dict(r) for r in conn.execute("SELECT * FROM food_log ORDER BY ts")],
             "body": [dict(r) for r in conn.execute("SELECT * FROM body ORDER BY ts")],
             "activity": [dict(r) for r in conn.execute("SELECT * FROM activity ORDER BY day")],
+            "workouts": [dict(r) for r in conn.execute("SELECT * FROM workouts ORDER BY start")],
             "events": [dict(r) for r in conn.execute("SELECT * FROM events ORDER BY ts")],
             "foods_own": [dict(r) for r in conn.execute(
                 "SELECT * FROM foods WHERE source IN ('custom', 'off') OR fav = 1 OR zero_user IS NOT NULL "

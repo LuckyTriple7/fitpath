@@ -413,7 +413,12 @@ function viewToday() {
   $$("[data-quick]").forEach(bt => (bt.onclick = () => quickAdd(+bt.dataset.quick)));
   $$("[data-copy]").forEach(bt => (bt.onclick = () => openCopy(bt.dataset.copy)));
   bindChallenge();
-  $("#act-card") && ($("#act-card").onclick = openSteps);
+  $("#act-card") && ($("#act-card").onclick = e => {
+    const li = e.target.closest("[data-workout]");
+    if (li) return openWorkout(((o.activity || {}).workouts || []).find(x => x.id === li.dataset.workout));
+    if (e.target.closest("#train-add")) return openWorkout();
+    openSteps();
+  });
   $("#weigh-btn") && ($("#weigh-btn").onclick = e => { e.preventDefault(); openWeigh(); });
 }
 
@@ -524,12 +529,91 @@ function mealHtml(key, label, icon) {
 function activityHtml() {
   const a = S.overview.activity, goal = S.settings.steps_goal || 8000;
   const steps = a && a.steps ? a.steps : 0;
-  const src = !a ? "Tippen zum Eintragen – oder Health Connect unter Mehr verbinden" :
+  const src = !a || !a.source ? "Tippen zum Eintragen – oder Health Connect unter Mehr verbinden" :
     a.source === "hc" ? `Health Connect · ${fmtAgo(a.updated)}` : "von Hand eingetragen";
+  const ws = (a && a.workouts) || [];
   return `<div class="card" id="act-card" style="cursor:pointer"><div class="card-head"><h2>👟 ${num.format(steps)} Schritte</h2>
     <small>${a && a.act_points ? `+${isPoints() ? a.act_points + " P" : a.act_kcal + " kcal"}` : `Ziel ${num.format(goal)}`}</small></div>
     <div class="progress${steps >= goal ? " good" : ""}"><i style="width:${Math.min(steps / goal, 1) * 100}%"></i></div>
-    <small>${esc(src)}</small></div>`;
+    <small>${esc(src)}</small>
+    ${ws.length ? `<ul class="list mt">${ws.map(w => `<li class="tap" data-workout="${esc(w.id)}"><span style="font-size:1.4rem">${w.icon}</span>
+      <div class="bd"><b>${esc(w.name)}</b><div class="meta">${fmtMin(w.minutes)} · ${esc(w.intensity)}${w.source === "hc" ? " · ⌚ Uhr" : ""}</div></div>
+      <span class="val">${workoutVal(w)}</span></li>`).join("")}</ul>` : ""}
+    ${a && a.train_capped ? `<p class="note">Tagesgrenze von ${S.training.max_points_day} Trainingspunkten erreicht.</p>` : ""}
+    <button class="btn small block mt" id="train-add">＋ Training</button></div>`;
+}
+function fmtMin(m) {
+  m = Math.round(m);
+  return m >= 60 ? `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ""}` : `${m} min`;
+}
+function workoutVal(w) {
+  if (w.duplicate) return `<span class="muted">doppelt</span>`;
+  if (!w.kcal && w.covered_steps) return `<span class="muted">über Schritte</span>`;
+  return `+${fmtVal(w.points, w.kcal)}`;
+}
+
+/* ---------- Training ---------- */
+
+// Vorschau wie auf dem Server (training.day_credit): kcal über Ruhe × 50 %, schon gezählte Schritte abgezogen
+function trainCredit(kind, inten, minutes, freeSteps) {
+  const T = S.training, sp = T.sports[kind], kg = S.overview.budget.weight;
+  const met = sp.met[Math.max(0, T.intensities.findIndex(x => x[0] === inten))];
+  const net = Math.max(0, met - 1) * kg * minutes / 60;
+  const covered = Math.min(Math.floor(sp.spm * minutes), Math.max(0, freeSteps));
+  const kcal = Math.max(0, net - covered * kg * T.kcal_per_step_kg) * T.credit;
+  return { met, kcal, covered, points: Math.floor(kcal / T.kcal_per_point + 0.5) };
+}
+
+function openWorkout(w = null) {
+  const T = S.training; if (!T) return;
+  const a = S.overview.activity || {};
+  const free = (a.extra_steps || 0) - (a.workouts || []).filter(x => !w || x.id !== w.id).reduce((n, x) => n + (x.covered_steps || 0), 0);
+  const hc = !!(w && w.source === "hc");
+  const kind = w ? w.kind : (store("fp_sport") || "schwimmen");
+  const cap = t => t[0].toUpperCase() + t.slice(1);
+  openSheet(`<h2>${w ? `${w.icon} Training` : "💪 Training eintragen"}</h2>
+    ${hc ? `<p class="note" style="margin-top:0">Von der Uhr über Health Connect${w.title ? ` · „${esc(w.title)}“` : ""} · ${new Date(w.start).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit", hour12: false })} Uhr · ${fmtMin(w.minutes)}. Stimmt die Sportart nicht, hier ändern.</p>` : ""}
+    ${w && w.duplicate ? `<p class="note" style="color:var(--warn)">Diese Einheit steckt schon in einer anderen (zwei Apps haben sie nach Health Connect geschrieben) und zählt deshalb nicht.</p>` : ""}
+    <label class="f"><span>Sportart</span></label>
+    ${chipGroup("kind", Object.entries(T.sports).map(([k, sp]) => [k, `${sp.icon} ${esc(sp.name)}`]), kind)}
+    ${hc ? "" : `<label class="f mt"><span>Dauer in Minuten</span>${decField('class="big" id="t-min"', numIn.format(w ? w.minutes : 30))}</label>
+      ${chipGroup("quick", [15, 30, 45, 60, 90].map(m => [m, `${m} min`]), w ? null : 30)}`}
+    <label class="f mt"><span>Intensität</span></label>
+    ${chipGroup("inten", T.intensities.map(([k]) => [k, cap(k)]), w ? w.intensity : "mittel")}
+    <p class="note" id="t-hint"></p>
+    <div class="amount-preview"><div class="big" id="t-pv"></div><small id="t-pv2"></small></div>
+    <div class="row nowrap mt">${w ? `<button class="btn danger" id="t-del">Löschen</button>` : ""}<button class="btn primary grow" id="t-save">${w ? "Speichern" : "Eintragen"}</button></div>
+    <p class="note">Gezählt wird nur, was über dem Ruheverbrauch liegt, davon die Hälfte, wie bei den Schritten. Schritte, die beim Gehen, Laufen oder Wandern schon gezählt haben, zieht FitPath ab. Höchstens ${T.max_points_day} Trainingspunkte am Tag.</p>`, root => {
+    const minutes = () => hc ? w.minutes : (parseNum($("#t-min", root).value) || 0);
+    const update = () => {
+      const k = chipVal(root, "kind"), i = chipVal(root, "inten"), m = minutes();
+      const r = trainCredit(k, i, m, free);
+      $("#t-pv", root).textContent = w && w.duplicate ? "zählt nicht" : `+${fmtVal(r.points, r.kcal)}`;
+      $("#t-pv2", root).textContent = r.covered ? `${num.format(r.covered)} Schritte davon zählen schon über den Schrittbonus`
+        : `Belastung ${num1.format(r.met)} MET · ${Math.round(r.kcal)} kcal gutgeschrieben`;
+      $("#t-hint", root).textContent = (T.intensities.find(x => x[0] === i) || [, ""])[1];
+      $("#t-save", root).disabled = !hc && !(m >= 3 && m <= 720);
+    };
+    bindChips(root, g => { if (g === "quick") $("#t-min", root).value = chipVal(root, "quick"); update(); });
+    $("#t-min", root) && ($("#t-min", root).oninput = () => { $$('[data-group="quick"] .chip', root).forEach(c => c.classList.remove("on")); update(); });
+    update();
+    $("#t-save", root).onclick = async () => {
+      const body = { kind: chipVal(root, "kind"), intensity: chipVal(root, "inten") };
+      if (!hc) body.minutes = minutes();
+      try {
+        S = w ? await api(`/api/workouts/${encodeURIComponent(w.id)}`, { method: "PUT", body })
+          : await api("/api/workouts", { method: "POST", body: { ...body, id: uuid(), day: S.overview.day } });
+      } catch (e) { return toast(e.message); }
+      store("fp_sport", body.kind);
+      vibrate(30); closeSheet(); viewToday();
+      toast(w ? "Gespeichert" : "Training eingetragen");
+    };
+    $("#t-del", root) && ($("#t-del", root).onclick = async () => {
+      try { S = await api(`/api/workouts/${encodeURIComponent(w.id)}`, { method: "DELETE" }); } catch (e) { return toast(e.message); }
+      closeSheet(); viewToday();
+      toast(hc ? "Ausgeblendet – kommt auch mit der Uhr nicht wieder" : "Gelöscht");
+    });
+  });
 }
 
 function weightMiniHtml() {
@@ -1372,7 +1456,7 @@ function openSteps() {
   const a = S.overview.activity;
   if (a && a.source === "hc") {
     return openSheet(`<h2>👟 Schritte</h2><p>${num.format(a.steps || 0)} Schritte laut Health Connect (${fmtAgo(a.updated)}).</p>
-      ${a.active_kcal ? `<p class="note">Aktive kcal laut Health Connect: ${Math.round(a.active_kcal)}. FitPath rechnet bewusst vorsichtiger: ${num.format(a.extra_steps)} Schritte über deiner Grundlinie von ${num.format(S.settings.steps_baseline)}, davon die Hälfte gutgeschrieben = ${a.act_kcal} kcal.</p>` : ""}
+      ${a.active_kcal ? `<p class="note">Aktive kcal laut Health Connect: ${Math.round(a.active_kcal)}. FitPath rechnet bewusst vorsichtiger: ${num.format(a.extra_steps)} Schritte über deiner Grundlinie von ${num.format(S.settings.steps_baseline)}, davon die Hälfte gutgeschrieben = ${a.step_kcal} kcal.</p>` : ""}
       <button class="btn block" data-close>Schließen</button>`);
   }
   openSheet(`<h2>👟 Schritte eintragen</h2>
@@ -1722,7 +1806,7 @@ function goalsForm(o) {
     <label class="f"><span>Zielgewicht (kg)</span>${decField('id="g-gw"', numIn.format(o.goal_weight))}</label>
     <label class="f"><span>Modus</span></label>${chipGroup("mode", [["lose", "Abnehmen"], ["keep", "Gewicht halten"]], o.mode)}
     <label class="f"><span>Tempo (kg pro Woche)</span></label>${chipGroup("pace", [["0.25", "0,25 sanft"], ["0.5", "0,5 empfohlen"], ["0.75", "0,75 zügig"]], String(o.pace))}
-    <label class="f"><span>Alltag (ohne Sport, der kommt über Schritte)</span></label>
+    <label class="f"><span>Alltag (ohne Sport, Schritte und Training zählen extra)</span></label>
     ${chipGroup("activity", Object.entries(lv).map(([k, l]) => [k, esc(l.split(" (")[0])]), String(o.activity))}
     <p class="note" id="g-act-hint"></p>
     <div class="card" style="text-align:center" id="g-prev"></div>`;
