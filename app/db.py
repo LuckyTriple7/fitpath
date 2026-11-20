@@ -94,6 +94,17 @@ CREATE TABLE IF NOT EXISTS workouts (
 );
 CREATE INDEX IF NOT EXISTS workouts_day ON workouts (day);
 
+CREATE TABLE IF NOT EXISTS meal_templates (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    meal TEXT,                         -- Standard-Mahlzeit (Chip in der leeren Mahlzeit auf Heute)
+    items TEXT NOT NULL,               -- JSON [{food_id, grams, portion}]
+    uses INTEGER NOT NULL DEFAULT 0,
+    last_used TEXT,
+    created TEXT NOT NULL,
+    updated TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS ingest_log (
     id INTEGER PRIMARY KEY, ts TEXT NOT NULL, seq INTEGER, kind TEXT NOT NULL,
     summary TEXT, raw TEXT);

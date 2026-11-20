@@ -7,7 +7,7 @@ Tage ohne Wiegen übernehmen den Trend unverändert.
 
 from datetime import date, timedelta
 
-from . import db
+from . import db, points
 
 ALPHA = 0.1
 
@@ -49,6 +49,34 @@ def rate_per_week(series: list, today: date, days: int = 21) -> float | None:
     return round(slope * 7, 2)
 
 
+def forecast(current: float, goal: float, rate: float | None, s: dict, today: date) -> dict | None:
+    """Wann das Zielgewicht bei gleichem Tempo erreicht wäre.
+
+    Grundlage ist das echte Tempo (Trend der letzten 3 Wochen), solange es das noch nicht gibt das geplante.
+    Schneller als 1 % des Gewichts pro Woche wird nicht gerechnet: Am Anfang ist viel davon Wasser, das
+    würde die Prognose zu früh machen. Angezeigt wird sie ungefähr (Anfang/Mitte/Ende eines Monats)."""
+    if s.get("mode") != "lose" or not goal or not current or current <= goal:
+        return None
+    if rate is not None:
+        if rate > -0.05:
+            return {"basis": "trend", "stalled": True}
+        per_week, basis = -rate, "trend"
+    else:
+        per_week, basis = float(s.get("pace") or 0), "plan"
+        if per_week <= 0:
+            return None
+    cap = current * points.MAX_LOSS_SHARE_WEEK
+    capped = per_week > cap
+    per_week = min(per_week, cap)
+    weeks = (current - goal) / per_week
+    out = {"basis": basis, "per_week": round(per_week, 2), "capped": capped, "weeks": round(weeks)}
+    if weeks > 260:
+        out["far"] = True
+    else:
+        out["date"] = (today + timedelta(days=round(weeks * 7))).isoformat()
+    return out
+
+
 def summary(conn, s: dict) -> dict:
     """Aktueller Stand für Start und Gewichts-Seite."""
     series = trend_series(daily_weights(conn))
@@ -77,6 +105,7 @@ def summary(conn, s: dict) -> dict:
         "start": start, "goal": goal, "lost": lost,
         "progress": round(max(0.0, min(lost / total, 1.0)), 3) if total else None,
         "rate": rate_per_week(series, today),
+        "forecast": forecast(current, goal, rate_per_week(series, today), s, today) if total else None,
         "bmi": round(current / (height * height), 1) if current and height else None,
         "milestones": milestones,
         "count": len(series),

@@ -414,6 +414,14 @@ function viewToday() {
   }));
   $$("[data-quick]").forEach(bt => (bt.onclick = () => quickAdd(+bt.dataset.quick)));
   $$("[data-copy]").forEach(bt => (bt.onclick = () => openCopy(bt.dataset.copy)));
+  $$("[data-keep]").forEach(bt => (bt.onclick = () => {
+    const meal = bt.dataset.keep, list = o.entries.filter(e => e.meal === meal && e.food_id);
+    openTemplateEdit({ name: TPL_NAME[meal], meal, items: list.map(e => ({ food_id: e.food_id, grams: e.grams, portion: e.portion, name: e.name, points: e.points, kcal: e.kcal })) });
+  }));
+  $$("[data-tpl]").forEach(bt => (bt.onclick = () => {
+    const t = (S.templates || []).find(x => x.id === bt.dataset.tpl);
+    if (t) logTemplate(t, bt.dataset.meal);
+  }));
   bindChallenge();
   $("#act-card") && ($("#act-card").onclick = e => {
     const li = e.target.closest("[data-workout]");
@@ -514,18 +522,103 @@ async function copyMeal(meal, ids = null) {
   } }]);
 }
 
+/* ---------- Gespeicherte Mahlzeiten ---------- */
+
+const TPL_NAME = { fruehstueck: "Mein Frühstück", mittag: "Mein Mittagessen", abend: "Mein Abendessen", snack: "Mein Snack" };
+
+async function logTemplate(t, meal, skip = []) {
+  let r;
+  try { r = await api(`/api/templates/${encodeURIComponent(t.id)}/log`, { method: "POST", body: { meal, day: curDay || S.today, skip } }); }
+  catch (e) { return toast(e.message); }
+  const added = r.added || []; delete r.added; S = r;
+  vibrate(30); lists = null; viewToday();
+  toast(`${t.name} erfasst`, 6000, [{ label: "Rückgängig", fn: async () => {
+    for (const id of added) { try { await deleteEntry(id); } catch (_) { /* weiter */ } }
+    viewToday();
+  } }]);
+}
+
+const tplRow = (it, i, btn) => `<li><span class="dot ${it.ampel || "green"}"></span>
+  <div class="bd"><b>${esc(it.name || "")}</b><div class="meta">${it.portion ? esc(it.portion) + " · " : ""}${fmtG(it.grams)}</div></div>
+  <span class="val">${fmtVal(it.points || 0, it.kcal || 0)}</span>${btn ? `<button class="btn icon small-icon" data-rm="${i}" aria-label="Rausnehmen">✕</button>` : ""}</li>`;
+
+// Vorschau zum Erfassen: einzelnes diesmal weglassen, dann in die gewählte Mahlzeit übernehmen
+function openTemplate(t, meal) {
+  const skip = new Set();
+  openSheet(`<h2>⭐ ${esc(t.name)}</h2>
+    ${chipGroup("meal", MEALS.map(([k, l, i]) => [k, `${i} ${l}`]), meal, false, "scroll")}
+    <ul class="list" id="tp-items"></ul>
+    <p class="note">Mit ✕ diesmal weglassen, die gespeicherte Mahlzeit bleibt, wie sie ist.</p>
+    <button class="btn primary block" id="tp-log"></button>
+    <div class="row nowrap mt"><button class="btn grow" id="tp-edit">Bearbeiten</button><button class="btn danger" id="tp-del">Löschen</button></div>`, root => {
+    bindChips(root);
+    const draw = () => {
+      const sel = t.items.filter((_, i) => !skip.has(i));
+      $("#tp-items", root).innerHTML = t.items.map((it, i) => skip.has(i) ? "" : tplRow(it, i, true)).join("") || `<li><div class="bd muted">Nichts mehr ausgewählt.</div></li>`;
+      const btn = $("#tp-log", root);
+      btn.disabled = !sel.length;
+      btn.textContent = sel.length ? `Erfassen · ${fmtVal(sel.reduce((a, x) => a + x.points, 0), sel.reduce((a, x) => a + x.kcal, 0))}` : "Erfassen";
+    };
+    $("#tp-items", root).onclick = e => { const b = e.target.closest("[data-rm]"); if (b) { skip.add(+b.dataset.rm); draw(); } };
+    $("#tp-log", root).onclick = () => { closeSheet(); logTemplate(t, chipVal(root, "meal") || meal, [...skip]); };
+    $("#tp-edit", root).onclick = () => openTemplateEdit(t);
+    $("#tp-del", root).onclick = async () => {
+      if (!confirm(`„${t.name}“ löschen? Schon erfasste Einträge bleiben.`)) return;
+      try { S = await api(`/api/templates/${encodeURIComponent(t.id)}`, { method: "DELETE" }); } catch (e) { return toast(e.message); }
+      lists = null; closeSheet(); viewToday(); toast("Mahlzeit gelöscht");
+    };
+    draw();
+  });
+}
+
+// Neu (aus einer Mahlzeit auf Heute) oder bearbeiten: Name, Standard-Mahlzeit, Lebensmittel rausnehmen
+function openTemplateEdit(t) {
+  const items = t.items.map(x => ({ ...x }));
+  const others = (S.templates || []).filter(x => x.id !== t.id).map(x => x.name.toLowerCase());
+  openSheet(`<h2>${t.id ? "Mahlzeit bearbeiten" : "☆ Als Mahlzeit merken"}</h2>
+    <label class="f"><span>Name</span><input type="text" id="te-name" maxlength="60" value="${esc(t.name || "")}"></label>
+    <p class="note" id="te-same" hidden>Eine Mahlzeit mit diesem Namen gibt es schon. Speichern ersetzt sie.</p>
+    <label class="f"><span>Auf Heute anbieten bei</span></label>
+    ${chipGroup("tmeal", [...MEALS.map(([k, l, i]) => [k, `${i} ${l}`]), ["", "nirgends"]], t.meal || "", false, "scroll")}
+    <ul class="list" id="te-items"></ul>
+    <p class="note">Ergänzen: Mahlzeit auf Heute erfassen, dort anpassen und mit ☆ unter demselben Namen neu merken.</p>
+    <button class="btn primary block" id="te-save">Speichern</button>`, root => {
+    bindChips(root);
+    const name = $("#te-name", root);
+    const draw = () => {
+      $("#te-items", root).innerHTML = items.map((it, i) => tplRow(it, i, items.length > 1)).join("");
+      $("#te-save", root).disabled = !items.length;
+    };
+    name.oninput = () => { $("#te-same", root).hidden = !t.id ? !others.includes(name.value.trim().toLowerCase()) : true; };
+    name.oninput();
+    $("#te-items", root).onclick = e => { const b = e.target.closest("[data-rm]"); if (b) { items.splice(+b.dataset.rm, 1); draw(); } };
+    $("#te-save", root).onclick = async () => {
+      const body = { name: name.value.trim(), meal: chipVal(root, "tmeal") || null,
+        items: items.map(({ food_id, grams, portion }) => ({ food_id, grams, portion })) };
+      try { S = await api(t.id ? `/api/templates/${encodeURIComponent(t.id)}` : "/api/templates", { method: t.id ? "PUT" : "POST", body }); }
+      catch (e) { return toast(e.message); }
+      lists = null; closeSheet(); viewToday();
+      toast(t.id ? "Gespeichert" : `„${body.name}“ gemerkt${body.meal ? ` – steht bei ${MEAL_LABEL[body.meal]} bereit` : ""}`);
+    };
+    draw();
+  });
+}
+
 function mealHtml(key, label, icon) {
   const list = S.overview.entries.filter(e => e.meal === key);
   const sumP = list.reduce((a, e) => a + e.points, 0), sumK = list.reduce((a, e) => a + (e.kcal || 0), 0);
   const prev = (S.overview.prev || {})[key], canCopy = !list.length && prev && prev.count;
+  const tpls = list.length ? [] : (S.templates || []).filter(t => t.meal === key).slice(0, 3);
   return `<div class="card meal"><div class="card-head"><h2>${icon} ${label}</h2>
       <div class="row nowrap"><span class="sum">${list.length ? fmtVal(sumP, sumK) : ""}</span>
       ${canCopy ? `<button class="btn icon small-icon" data-copy="${key}" aria-label="${label} wie gestern" title="Wie gestern">↺</button>` : ""}
+      ${list.length ? `<button class="btn icon small-icon" data-keep="${key}" aria-label="${label} als Mahlzeit merken" title="Als Mahlzeit merken">☆</button>` : ""}
       <button class="btn icon small-icon" data-add="${key}" aria-label="${label} erfassen">+</button></div></div>
     ${list.length ? `<ul class="list">${list.map(e => `<li class="tap" data-entry="${esc(e.id)}"><span class="dot ${e.ampel}"></span>
       <div class="bd"><b>${esc(e.name)}</b><div class="meta">${e.portion ? esc(e.portion) + " · " : ""}${fmtG(e.grams)}${isPoints() ? ` · ${Math.round(e.kcal || 0)} kcal` : ""}</div></div>
       <span class="val">${e.zero ? `<span class="zero">0 P</span>` : fmtVal(e.points, e.kcal || 0)}</span></li>`).join("")}</ul>`
-      : prevHtml(key)}</div>`;
+      : prevHtml(key)}
+    ${tpls.length ? `<div class="chips scroll" style="margin-top:8px">${tpls.map(t => `<button class="chip" data-tpl="${esc(t.id)}" data-meal="${key}">⭐ ${esc(t.name)} · ${fmtVal(t.points, t.kcal)}</button>`).join("")}</div>` : ""}</div>`;
 }
 
 function activityHtml() {
@@ -618,6 +711,22 @@ function openWorkout(w = null) {
   });
 }
 
+// „Mitte März“ statt eines genauen Tages: das Tempo schwankt
+function fmtAbout(iso) {
+  const d = new Date(iso + "T12:00:00"), day = d.getDate();
+  const part = day <= 10 ? "Anfang" : day <= 20 ? "Mitte" : "Ende";
+  const year = d.getFullYear() !== new Date().getFullYear() ? ` ${d.getFullYear()}` : "";
+  return `${part} ${d.toLocaleDateString("de-DE", { month: "long" })}${year}`;
+}
+function forecastHtml(f, goal) {
+  if (!f) return "";
+  if (f.stalled) return `<p class="note">📅 Prognose gerade nicht möglich: Der Trend zeigt seit drei Wochen nicht nach unten. Plateaus sind normal, oft geht es danach wieder runter.</p>`;
+  const when = f.far ? "in mehr als fünf Jahren" : `etwa <b>${fmtAbout(f.date)}</b> (in ${f.weeks} ${f.weeks === 1 ? "Woche" : "Wochen"})`;
+  const base = f.basis === "plan" ? `mit deinem geplanten Tempo von ${num1.format(f.per_week)} kg pro Woche`
+    : `bei deinem Tempo von ${num1.format(f.per_week)} kg pro Woche${f.capped ? " (gedeckelt auf 1 % pro Woche, am Anfang ist viel Wasser dabei)" : ""}`;
+  return `<p class="note">📅 ${num1.format(goal)} kg ${base}: ${when}.${f.basis === "plan" ? " Genauer, sobald drei Wochen Wiegewerte da sind." : ""}</p>`;
+}
+
 function weightMiniHtml() {
   const b = S.body;
   if (!b || !b.trend) return "";
@@ -625,7 +734,7 @@ function weightMiniHtml() {
   return `<a class="card" href="#gewicht" style="display:block;text-decoration:none;color:inherit">
     <div class="card-head"><h2>⚖️ ${num1.format(b.trend)} kg</h2><small>Trend${b.rate != null ? ` · ${fmtSigned(b.rate)} kg/Woche` : ""}</small></div>
     ${b.weight ? `<small style="display:block;margin-bottom:6px">Waage ${b.weighed_today ? "heute" : fmtDay(b.day)}: <b>${num1.format(b.weight)} kg</b></small>` : ""}
-    ${b.progress != null ? `<div class="progress"><i style="width:${b.progress * 100}%"></i></div><small>${num1.format(b.lost)} kg geschafft · Ziel ${num1.format(b.goal)} kg</small>` : ""}
+    ${b.progress != null ? `<div class="progress"><i style="width:${b.progress * 100}%"></i></div><small>${num1.format(b.lost)} kg geschafft · Ziel ${num1.format(b.goal)} kg${b.forecast && b.forecast.date ? ` etwa ${fmtAbout(b.forecast.date)}` : ""}</small>` : ""}
     ${!b.weighed_today && weighDay ? `<div class="mt"><button class="btn small primary" id="weigh-btn">Heute wiegen</button></div>` : ""}</a>`;
 }
 
@@ -915,7 +1024,7 @@ function openAdd(meal, query = "") {
     const curMeal = () => chipVal(root, "meal") || meal;
     bindChips(root);
     const showLists = async () => {
-      $("#add-tabs", root).innerHTML = `<div class="tabs">${[["recent", "Zuletzt"], ["favorites", "Favoriten"], ["custom", "Eigene"], ["eatout", "🍽️ Auswärts"]]
+      $("#add-tabs", root).innerHTML = `<div class="tabs">${[["recent", "Zuletzt"], ["favorites", "Favoriten"], ["meals", "⭐ Mahlzeiten"], ["custom", "Eigene"], ["eatout", "🍽️ Auswärts"]]
         .map(([k, l]) => `<button data-t="${k}" class="${addTab === k ? "on" : ""}">${l}</button>`).join("")}</div>`;
       $$("[data-t]", root).forEach(b => (b.onclick = () => { addTab = b.dataset.t; showLists(); }));
       if (!lists) {
@@ -924,6 +1033,14 @@ function openAdd(meal, query = "") {
       }
       const items = lists[addTab] || [];
       if (addTab === "eatout") { res.innerHTML = eatoutList(items); return; }
+      if (addTab === "meals") {
+        const t = S.templates || [];
+        res.innerHTML = t.length ? `<ul class="list">${t.map(x => `<li class="tap" data-tpl-open="${esc(x.id)}"><span style="font-size:1.3rem">⭐</span>
+          <div class="bd"><b>${esc(x.name)}</b><div class="meta">${esc(x.items.map(i => shortName(i.name)).join(", "))}</div></div>
+          <span class="val">${fmtVal(x.points, x.kcal)}</span></li>`).join("")}</ul>`
+          : `<div class="empty">Noch keine Mahlzeiten gemerkt. Auf Heute bei einer Mahlzeit mit Einträgen auf ☆ tippen.</div>`;
+        return;
+      }
       res.innerHTML = items.length ? foodList(items) : `<div class="empty">${addTab === "recent" ? "Noch nichts gegessen – such oben nach einem Lebensmittel." :
         addTab === "favorites" ? "Noch keine Favoriten. Tipp beim Erfassen auf ☆." : "Noch keine eigenen Lebensmittel oder gescannten Produkte."}</div>`;
     };
@@ -940,6 +1057,8 @@ function openAdd(meal, query = "") {
     };
     q.oninput = () => { clearTimeout(timer); timer = setTimeout(runSearch, 180); };
     res.onclick = async e => {
+      const tp = e.target.closest("[data-tpl-open]");
+      if (tp) { const t = (S.templates || []).find(x => x.id === tp.dataset.tplOpen); return t && openTemplate(t, curMeal()); }
       const li = e.target.closest("[data-food]"); if (!li) return;
       const all = [...(lists ? [...lists.recent, ...lists.favorites, ...lists.custom, ...(lists.eatout || [])] : [])];
       let food = all.find(f => f.id === +li.dataset.food) || (res._hits || []).find(f => f.id === +li.dataset.food);
@@ -1711,6 +1830,7 @@ async function viewWeight() {
     ${b.progress != null ? `<div class="card"><div class="card-head"><h2>🎯 Ziel ${num1.format(b.goal)} kg</h2><small>${Math.round(b.progress * 100)} %</small></div>
       <div class="progress"><i style="width:${b.progress * 100}%"></i></div>
       <div class="chips mt">${b.milestones.map(m => `<span class="pill${m.done ? " good" : ""}">${m.done ? "✓ " : ""}${m.goal ? "Ziel" : `−${m.pct} %`} · ${num1.format(m.kg)} kg</span>`).join("")}</div>
+      ${forecastHtml(b.forecast, b.goal)}
       <p class="note">Schon −5 % Körpergewicht senken Blutdruck und Blutzucker messbar.</p></div>` : ""}
     <div id="bmi"></div>
     <div class="card"><div class="card-head"><h2>📈 Verlauf</h2></div>

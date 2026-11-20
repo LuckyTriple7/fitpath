@@ -15,8 +15,22 @@ Doku: [README.md](README.md)
 - Open-Food-Facts-Export (nur Deutschland, mit Nährwerten) wöchentlich einlesen, damit Markenprodukte auch per Suche auftauchen.
 - Wochenrückblick als Obsidian-Notiz.
 
+### Aus dem Vergleich mit anderen Apps (20.11.2026)
+Verglichen mit WW, Yazio, MyFitnessPal, Lose It!, FDDB, Noom, MacroFactor. Grob nach Nutzen sortiert.
+- **Vorausplanen und „Was passt noch?“** (WW): Einträge für kommende Tage erlauben (heute sperrt „›“ die Zukunft), abends Vorschläge aus Favoriten/Zuletzt, die in die übrigen Punkte passen.
+- **Markenprodukte in der Suche** (FDDB, Yazio): siehe Open-Food-Facts-Export unter Schritt 5. Bisher findet die Suche Markenprodukte nur, wenn sie schon einmal gescannt wurden.
+- **Wasser** (WW, Yazio, Lifesum): Gläser antippen, Tagesziel als Ring.
+- **Beliebigen Tag kopieren, Einträge verschieben** (MyFitnessPal): nicht nur „wie gestern“; falsch einsortierten Eintrag in eine andere Mahlzeit oder einen anderen Tag schieben.
+- **Wochenrückblick** (WW Weekly Check-in): montags Karte mit Punkten, Trend, Training, bestem Tag; siehe auch Schritt 4 und 5.
+- **Schlaf aus Health Connect** (Noom, WW): Life Dashboard kann `sleep` schicken; Zusammenhang wenig Schlaf ↔ Heißhunger in der Statistik.
+- **Restaurantketten** (Yazio, FDDB): McDonald's, Burger King, Subway, Vapiano … mit veröffentlichten Nährwerten als Ergänzung zu „Auswärts“; muss gepflegt werden.
+- **Einkaufsliste aus Gerichten** (Yazio, WW): Zutaten eigener Rezepte auf eine Liste.
+- **Fortschrittsfotos** (Yazio, Lose It!): privat auf dem eigenen Server, Vergleich vorher/nachher.
+- **Intervallfasten-Timer** (Yazio, Zero): nur bei Bedarf.
+- Bewusst nicht: Community/Social, große Rezeptdatenbank (Inhalte, Lizenzen), Mikronährstoffe.
+
 ### Ideen
-- Wasser trinken zählen.
+- Wasser trinken zählen (siehe oben).
 - Receive/Writeback von Life Dashboard: Gewicht aus FitPath nach Health Connect zurückschreiben.
 
 ## Erledigt
@@ -37,3 +51,8 @@ Commit-Angaben bis 18.11.2026 beziehen sich auf das frühere Sammel-Repo, aus de
 - **19.11.2026** Python 3.15, `httpx2` statt `httpx`, CI testet mit der Python-Version des Images (0.13.0)
 - **19.11.2026** Echter Bedarf: Verbrauch aus Einträgen und Gewicht, Vorschlag zur Korrektur des Budgets (0.14.0)
 - **19.11.2026** Auswärts essen: 38 Restaurant-Teller aus BLS-Bausteinen mit Größe klein/normal/groß und Fettzuschlag
+- **20.11.2026** „Wie gestern“ als ↺-Knopf mit Auswahlfenster, Portionen in 0,5er-Schritten (0.16.0)
+- **20.11.2026** Trainingspunkte nach MET, von Hand und über Health Connect, ohne Doppelzählung mit Schritten (0.17.0)
+- **20.11.2026** Barcode-Scanner fürs iPhone (ZXing als WebAssembly), Foto vom Barcode, Zähler bei Lebensmitteln ohne Portionen behoben (0.18.0); „verbraucht“ im Ring (0.18.1)
+- **20.11.2026** Training in der Statistik (0.19.0), Einkaufsmodus mit Warte-Hinweis beim Open-Food-Facts-Limit (0.20.0)
+- **20.11.2026** Gespeicherte Mahlzeiten („Mein Frühstück“ mit einem Tipp), Prognose fürs Zielgewicht

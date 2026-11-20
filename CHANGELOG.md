@@ -6,6 +6,10 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+### Neu
+- **Gespeicherte Mahlzeiten**: Bei einer Mahlzeit mit Einträgen auf ☆ tippen und als „Mein Frühstück“ o. Ä. merken. Ist die Mahlzeit leer, steht sie dort als Chip bereit, ein Tipp erfasst alles (mit „Rückgängig“). Im Erfassen-Fenster unter „⭐ Mahlzeiten“ lässt sich vorher einzelnes weglassen und die Mahlzeit bearbeiten oder löschen. Gleicher Name ersetzt die alte, so lässt sie sich ergänzen. Die Nährwerte kommen beim Erfassen immer frisch aus der Datenbank.
+- **Prognose fürs Zielgewicht**: Gewicht-Seite und Gewichtskarte auf Heute zeigen, wann das Ziel beim aktuellen Tempo ungefähr erreicht ist („etwa Mitte März“). Grundlage ist der Trend der letzten drei Wochen, vorher das geplante Tempo. Schneller als 1 % pro Woche wird nicht gerechnet, und bei einem Plateau gibt es keine Prognose.
+
 ## [0.20.0] – 2026-11-20
 
 ### Neu

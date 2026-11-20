@@ -14,7 +14,7 @@ import httpx2
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 
-from . import __version__, adaptive, ai, auth, eatout, backup, body, db, diary, foods, ingest, motivation, points, push, recipe_import, swaps, training
+from . import __version__, adaptive, ai, auth, eatout, backup, body, db, diary, foods, ingest, meals, motivation, points, push, recipe_import, swaps, training
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 MAX_INGEST_BYTES = 12 * 1024 * 1024
@@ -263,6 +263,7 @@ def _state(conn, day: str | None = None) -> dict:
         "motivation": motivation.state(conn, s),
         "body": body.summary(conn, s),
         "recent": foods.recent(conn, 12),
+        "templates": meals.list_all(conn),
         "vapid_key": push.public_key(),
         "activity_levels": points.ACTIVITY_LEVELS,
         "training": training.catalog(),
@@ -564,6 +565,62 @@ async def log_copy(request: Request, device=Depends(auth.require)):
             e.update(id=str(uuid.uuid4()), day=dst, ts=db.iso(db.now_utc()))
             _upsert_entry(conn, e)
         return _state(conn, dst)
+
+
+# ---------- Gespeicherte Mahlzeiten ----------
+
+@app.post("/api/templates")
+async def template_add(request: Request, device=Depends(auth.require)):
+    """Neue Mahlzeit merken; gleicher Name ersetzt die vorhandene."""
+    data = await _json(request)
+    with db.connect() as conn:
+        try:
+            meals.save(conn, data)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from None
+        return _state(conn)
+
+
+@app.put("/api/templates/{tid}")
+async def template_put(tid: str, request: Request, device=Depends(auth.require)):
+    data = await _json(request)
+    with db.connect() as conn:
+        try:
+            meals.save(conn, data, tid)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from None
+        except LookupError as exc:
+            raise HTTPException(404, str(exc)) from None
+        return _state(conn)
+
+
+@app.delete("/api/templates/{tid}")
+def template_delete(tid: str, device=Depends(auth.require)):
+    with db.connect() as conn:
+        if not meals.delete(conn, tid):
+            raise HTTPException(404, "Mahlzeit nicht gefunden")
+        return _state(conn)
+
+
+@app.post("/api/templates/{tid}/log")
+async def template_log(tid: str, request: Request, device=Depends(auth.require)):
+    """Mahlzeit als Einträge erfassen (Nährwerte frisch aus der Datenbank). skip: Positionen, die diesmal fehlen."""
+    data = await _json(request)
+    day = _day(data.get("day") or db.today())
+    meal = data.get("meal") if data.get("meal") in diary.MEALS else "snack"
+    with db.connect() as conn:
+        try:
+            items = meals.items_for_log(conn, tid, data.get("skip") or [])
+        except LookupError as exc:
+            raise HTTPException(404, str(exc)) from None
+        if not items:
+            raise HTTPException(400, "Nichts ausgewählt")
+        added = []
+        for it in items:
+            e = _clean_entry(conn, {**it, "meal": meal, "day": day})
+            _upsert_entry(conn, e)
+            added.append(e["id"])
+        return {**_state(conn, day), "added": added}
 
 
 @app.delete("/api/log/{eid}")
@@ -948,6 +1005,7 @@ def export(device=Depends(auth.require)):
             "body": [dict(r) for r in conn.execute("SELECT * FROM body ORDER BY ts")],
             "activity": [dict(r) for r in conn.execute("SELECT * FROM activity ORDER BY day")],
             "workouts": [dict(r) for r in conn.execute("SELECT * FROM workouts ORDER BY start")],
+            "meal_templates": [dict(r) for r in conn.execute("SELECT * FROM meal_templates ORDER BY name")],
             "events": [dict(r) for r in conn.execute("SELECT * FROM events ORDER BY ts")],
             "foods_own": [dict(r) for r in conn.execute(
                 "SELECT * FROM foods WHERE source IN ('custom', 'off') OR fav = 1 OR zero_user IS NOT NULL "
