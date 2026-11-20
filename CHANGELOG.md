@@ -6,6 +6,10 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+### Geändert
+- „Wie gestern“ auf der Startseite ist jetzt ein kleiner ↺-Knopf neben dem +, überall gleich groß. Ein Tipp öffnet ein Fenster mit den Einträgen von gestern. Was du nicht nochmal willst, nimmst du mit ✕ raus, der Rest wird übernommen. Gestern bleibt dabei unverändert.
+- Portionen gehen in halben Schritten (0,5 · 1 · 1,5 …): beim Erfassen mit dem Portions-Zähler und bei eigenen Gerichten (anlegen und per Link übernehmen).
+
 ## [0.15.1] – 2026-11-19
 
 ### Behoben

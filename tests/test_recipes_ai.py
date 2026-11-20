@@ -72,6 +72,26 @@ def test_copy_yesterday():
     st = c.post("/api/log/copy", headers=H, json={"from": yesterday, "to": today, "meal": "fruehstueck"}).json()
     after = len([e for e in st["overview"]["entries"] if e["meal"] == "fruehstueck"])
     assert after == before + st["overview"]["prev"]["fruehstueck"]["count"]
+    # Nur ausgewählte Einträge übernehmen (im Fenster mit ✕ rausgenommen)
+    c.post("/api/log", headers=H, json={"id": "y2", "food_id": brot["id"], "grams": 50, "meal": "mittag", "day": yesterday})
+    c.post("/api/log", headers=H, json={"id": "y3", "food_id": brot["id"], "grams": 70, "meal": "mittag", "day": yesterday})
+    items = c.get("/api/state").json()["overview"]["prev"]["mittag"]["items"]
+    assert {i["id"] for i in items} >= {"y2", "y3"} and items[0]["grams"] and "points" in items[0]
+    st = c.post("/api/log/copy", headers=H, json={"from": yesterday, "to": today, "meal": "mittag", "ids": ["y3"]}).json()
+    lunch = [e for e in st["overview"]["entries"] if e["meal"] == "mittag"]
+    assert [e["grams"] for e in lunch] == [70]
+    c.__exit__(None, None, None)
+
+
+def test_recipe_half_servings():
+    c = client()
+    hack = food(c, "hackfleisch", "Schwein Hackfleisch, roh")
+    body = {"name": "Halbgericht", "servings": 2.5, "items": [{"food_id": hack["id"], "grams": 500}]}
+    rec = c.post("/api/recipes", headers=H, json=body).json()
+    assert rec["recipe"]["servings"] == 2.5 and rec["portions"][0]["g"] == 200
+    rec = c.post("/api/recipes", headers=H, json={**body, "servings": 0.2}).json()
+    assert rec["recipe"]["servings"] == 0.5                      # Untergrenze halbe Portion
+    assert c.post("/api/recipes", headers=H, json={**body, "servings": "x"}).status_code == 400
     c.__exit__(None, None, None)
 
 

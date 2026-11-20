@@ -74,8 +74,9 @@ def overview(conn, s: dict, day: str) -> dict:
     prev_day = (d - timedelta(days=1)).isoformat()
     prev = {}
     for e in entries(conn, prev_day):
-        m = prev.setdefault(e["meal"], {"count": 0, "points": 0, "kcal": 0.0, "names": []})
+        m = prev.setdefault(e["meal"], {"count": 0, "points": 0, "kcal": 0.0, "names": [], "items": []})
         m["count"] += 1
+        m["items"].append({k: e.get(k) for k in ("id", "name", "grams", "portion", "points", "kcal", "ampel")})
         m["points"] += e["points"]
         m["kcal"] += float(e.get("kcal") or 0)
         if len(m["names"]) < 3:

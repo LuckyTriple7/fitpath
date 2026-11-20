@@ -562,7 +562,12 @@ def _recipe_values(conn, data: dict) -> dict:
     if total is not None and not raw_total * 0.2 <= total <= raw_total * 3:
         raise ValueError("Gesamtgewicht passt nicht zu den Zutaten")
     weight = total or raw_total
-    servings = max(1, min(int(data.get("servings") or 1), 50))
+    try:   # in halben Portionen
+        servings = round(float(str(data.get("servings") or 1).replace(",", ".")) * 2) / 2
+    except ValueError:
+        raise ValueError("Portionen ungültig") from None
+    servings = max(0.5, min(servings, 50))
+    servings = int(servings) if servings.is_integer() else servings
     sums = {k: 0.0 for k in db.NUTRIENTS}
     pts = 0.0
     for food, grams in items:

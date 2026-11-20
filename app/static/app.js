@@ -411,7 +411,7 @@ function viewToday() {
     if (e) openEntry(e);
   }));
   $$("[data-quick]").forEach(bt => (bt.onclick = () => quickAdd(+bt.dataset.quick)));
-  $$("[data-copy]").forEach(bt => (bt.onclick = () => copyMeal(bt.dataset.copy)));
+  $$("[data-copy]").forEach(bt => (bt.onclick = () => openCopy(bt.dataset.copy)));
   bindChallenge();
   $("#act-card") && ($("#act-card").onclick = openSteps);
   $("#weigh-btn") && ($("#weigh-btn").onclick = e => { e.preventDefault(); openWeigh(); });
@@ -462,13 +462,42 @@ function prevHtml(key) {
   const p = (S.overview.prev || {})[key];
   if (!p || !p.count) return `<div class="empty-line">Noch nichts erfasst.</div>`;
   const what = p.names.join(", ") + (p.count > p.names.length ? ` +${p.count - p.names.length}` : "");
-  return `<div class="spread"><div class="empty-line" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Gestern: ${esc(what)}</div>
-    <button class="btn small" data-copy="${key}">↺ Wie gestern · ${fmtVal(p.points, p.kcal)}</button></div>`;
+  return `<div class="empty-line" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Gestern: ${esc(what)}</div>`;
 }
 
-async function copyMeal(meal) {
+// Fenster „Wie gestern“: Einträge vom Vortag ansehen, einzelne rausnehmen, Rest übernehmen
+function openCopy(meal) {
+  const p = (S.overview.prev || {})[meal]; if (!p || !p.count) return;
+  const items = p.items || [];
+  const keep = new Set(items.map(it => it.id));
+  openSheet(`<h2>↺ ${esc(MEAL_LABEL[meal])} wie gestern</h2>
+    <p class="note" style="margin-top:0">Was du nicht nochmal willst, mit ✕ rausnehmen. Der Eintrag von gestern bleibt dabei erhalten.</p>
+    <ul class="list" id="cp-items"></ul>
+    <div class="row nowrap mt"><button class="btn" id="cp-cancel">Abbrechen</button><button class="btn primary grow" id="cp-save"></button></div>`, root => {
+    const draw = () => {
+      const sel = items.filter(it => keep.has(it.id));
+      $("#cp-items", root).innerHTML = sel.length ? sel.map(it => `<li><span class="dot ${it.ampel || "green"}"></span>
+        <div class="bd"><b>${esc(it.name)}</b><div class="meta">${it.portion ? esc(it.portion) + " · " : ""}${fmtG(it.grams || 0)}</div></div>
+        <span class="val">${fmtVal(it.points, it.kcal || 0)}</span>
+        <button class="btn icon small-icon" data-rm="${esc(it.id)}" aria-label="Rausnehmen">✕</button></li>`).join("")
+        : `<li><div class="bd muted">Nichts mehr ausgewählt.</div></li>`;
+      const pts = sel.reduce((a, it) => a + it.points, 0), kcal = sel.reduce((a, it) => a + (it.kcal || 0), 0);
+      const btn = $("#cp-save", root);
+      btn.disabled = !sel.length;
+      btn.textContent = sel.length ? `${sel.length === items.length ? "Alles" : sel.length} übernehmen · ${fmtVal(pts, kcal)}` : "Übernehmen";
+    };
+    $("#cp-items", root).onclick = e => { const b = e.target.closest("[data-rm]"); if (b) { keep.delete(b.dataset.rm); draw(); } };
+    $("#cp-cancel", root).onclick = closeSheet;
+    $("#cp-save", root).onclick = () => { closeSheet(); copyMeal(meal, keep.size < items.length ? [...keep] : null); };
+    draw();
+  });
+}
+
+async function copyMeal(meal, ids = null) {
   const o = S.overview, before = new Set(o.entries.map(e => e.id));
-  try { S = await api("/api/log/copy", { method: "POST", body: { from: o.prev_day, to: o.day, meal } }); }
+  const body = { from: o.prev_day, to: o.day, meal };
+  if (ids) body.ids = ids;
+  try { S = await api("/api/log/copy", { method: "POST", body }); }
   catch (e) { return toast(e.message); }
   const added = S.overview.entries.filter(e => !before.has(e.id)).map(e => e.id);
   vibrate(30); lists = null; viewToday();
@@ -481,8 +510,10 @@ async function copyMeal(meal) {
 function mealHtml(key, label, icon) {
   const list = S.overview.entries.filter(e => e.meal === key);
   const sumP = list.reduce((a, e) => a + e.points, 0), sumK = list.reduce((a, e) => a + (e.kcal || 0), 0);
+  const prev = (S.overview.prev || {})[key], canCopy = !list.length && prev && prev.count;
   return `<div class="card meal"><div class="card-head"><h2>${icon} ${label}</h2>
       <div class="row nowrap"><span class="sum">${list.length ? fmtVal(sumP, sumK) : ""}</span>
+      ${canCopy ? `<button class="btn icon small-icon" data-copy="${key}" aria-label="${label} wie gestern" title="Wie gestern">↺</button>` : ""}
       <button class="btn icon small-icon" data-add="${key}" aria-label="${label} erfassen">+</button></div></div>
     ${list.length ? `<ul class="list">${list.map(e => `<li class="tap" data-entry="${esc(e.id)}"><span class="dot ${e.ampel}"></span>
       <div class="bd"><b>${esc(e.name)}</b><div class="meta">${e.portion ? esc(e.portion) + " · " : ""}${fmtG(e.grams)}${isPoints() ? ` · ${Math.round(e.kcal || 0)} kcal` : ""}</div></div>
@@ -866,8 +897,8 @@ function openAmount(food, meal, entry = null) {
   let grams = entry ? entry.grams : (food.last_grams || (def ? def.g : 100));
   let portion = entry ? entry.portion : (food.last_grams ? food.last_portion : (def ? def.name : null));
   let count = 1;
-  const multi = portion && /^(\d+)× (.+)$/.exec(portion);
-  if (multi) { count = +multi[1]; portion = multi[2]; }
+  const multi = portion && /^(\d+(?:,5)?)× (.+)$/.exec(portion);
+  if (multi) { count = parseNum(multi[1]); portion = multi[2]; }
   if (portion && !portions.some(p => p.name === portion)) portion = null;
   const src = { bls: "BLS 4.0", off: "Open Food Facts", custom: "Eigenes", recipe: "Gericht", eatout: "🍽️ Auswärts" }[food.source] || "";
 
@@ -880,7 +911,7 @@ function openAmount(food, meal, entry = null) {
     ${portions.length ? `<div class="chips" id="portions">${portions.map((p, i) => `<button class="chip" data-p="${i}">${esc(p.name)}</button>`).join("")}
       <button class="chip" data-p="g">Gramm</button></div>` : ""}
     <div class="row nowrap mt">
-      <div class="stepper" id="stepper" ${portion ? "" : "hidden"}><button class="btn icon small-icon" id="minus">−</button><b id="cnt">${count}</b><button class="btn icon small-icon" id="plus">+</button></div>
+      <div class="stepper" id="stepper" ${portion ? "" : "hidden"}><button class="btn icon small-icon" id="minus">−</button><b id="cnt">${num1.format(count)}</b><button class="btn icon small-icon" id="plus">+</button></div>
       <label class="grow" style="display:block">${decField('class="big" id="grams"', numIn.format(grams))}</label>
       <span class="muted">g</span></div>
     ${chipGroup("meal", MEALS.map(([k, l, i]) => [k, `${i} ${l}`]), entry ? entry.meal : meal, false, "scroll mt")}
@@ -920,8 +951,8 @@ function openAmount(food, meal, entry = null) {
       $("#save", root).disabled = !(grams > 0 && grams <= 5000);
     };
     const setPortion = (p, c = count) => {
-      portion = p ? p.name : null; count = Math.max(1, c);
-      $("#stepper", root).hidden = !p; $("#cnt", root).textContent = count;
+      portion = p ? p.name : null; count = Math.min(Math.max(0.5, c), 50);   // halbe Schritte
+      $("#stepper", root).hidden = !p; $("#cnt", root).textContent = num1.format(count);
       if (p) gi.value = numIn.format(Math.round(p.g * count * 10) / 10);
       markPortion(); update();
     };
@@ -930,11 +961,11 @@ function openAmount(food, meal, entry = null) {
       const c = e.target.closest("[data-p]"); if (!c) return;
       if (c.dataset.p === "g") { setPortion(null); gi.focus(); gi.select(); } else setPortion(portions[+c.dataset.p], 1);
     });
-    $("#minus", root).onclick = () => { const p = portions.find(x => x.name === portion); if (p) setPortion(p, count - 1); };
-    $("#plus", root).onclick = () => { const p = portions.find(x => x.name === portion); if (p) setPortion(p, count + 1); };
+    $("#minus", root).onclick = () => { const p = portions.find(x => x.name === portion); if (p) setPortion(p, count - 0.5); };
+    $("#plus", root).onclick = () => { const p = portions.find(x => x.name === portion); if (p) setPortion(p, count + 0.5); };
     gi.oninput = () => { if (portion) { portion = null; $("#stepper", root).hidden = true; markPortion(); } update(); };
     $("#save", root).onclick = async () => {
-      const label = portion ? (count > 1 ? `${count}× ${portion}` : portion) : null;
+      const label = portion ? (count !== 1 ? `${num1.format(count)}× ${portion}` : portion) : null;
       const e = { id: entry ? entry.id : uuid(), food_id: food.id, grams, portion: label, meal: chipVal(root, "meal") || meal, day: entry ? entry.day : (curDay || S.today) };
       if (!(await saveEntry(e))) return;
       vibrate(30); lists = null;
@@ -988,7 +1019,7 @@ function openRecipe(rec, meal) {
       <button class="btn small" id="r-import">Holen</button></div><p class="note">Oder von Hand: Zutaten unten suchen und antippen.</p>`}
     <label class="f"><span>Name</span><input type="text" id="r-name" maxlength="120" value="${esc(rec ? rec.name : "")}" placeholder="z. B. Chili con Carne"></label>
     <div class="grid2"><label class="f"><span>Portionen</span>
-      <div class="stepper"><button class="btn icon small-icon" id="r-minus">−</button><b id="r-serv">${servings}</b><button class="btn icon small-icon" id="r-plus">+</button></div></label>
+      <div class="stepper"><button class="btn icon small-icon" id="r-minus">−</button><b id="r-serv">${num1.format(servings)}</b><button class="btn icon small-icon" id="r-plus">+</button></div></label>
       <label class="f"><span>Gewicht fertig (g, optional)</span>${decField('id="r-total" placeholder="Summe der Zutaten"', rec && rec.recipe.total_g ? numIn.format(rec.recipe.total_g) : "")}</label></div>
     <h3 class="mt">Zutaten</h3>
     <ul class="list" id="r-items"></ul>
@@ -1015,7 +1046,7 @@ function openRecipe(rec, meal) {
         const n = scaleFood(f, it.grams || 0);
         kcal += n.kcal; if (!f.zero) pts += rawPoints(n);
       }
-      $("#r-serv", root).textContent = servings;
+      $("#r-serv", root).textContent = num1.format(servings);
       $("#r-sum", root).innerHTML = items.length ? `<small class="muted">Pro Portion (${num.format(Math.round(total / servings))} g)</small>
         <div style="font-size:1.8rem;font-weight:800">${known ? (isPoints() ? `${Math.floor(pts / servings + 0.5)} P` : `${Math.round(kcal / servings)} kcal`) : "…"}</div>
         <small>${known ? `${Math.round(kcal / servings)} kcal · ganzes Gericht ${num.format(Math.round(kcal))} kcal` : "wird nach dem Speichern berechnet"}</small>` : `<small class="muted">Zutaten hinzufügen</small>`;
@@ -1029,8 +1060,8 @@ function openRecipe(rec, meal) {
       try { openRecipeImport(await api("/api/recipes/import", { method: "POST", body: { url } }), meal); }
       catch (e) { toast(e.message); btn.disabled = false; btn.textContent = "Holen"; }
     });
-    $("#r-minus", root).onclick = () => { servings = Math.max(1, servings - 1); summary(); };
-    $("#r-plus", root).onclick = () => { servings = Math.min(50, servings + 1); summary(); };
+    $("#r-minus", root).onclick = () => { servings = Math.max(0.5, servings - 0.5); summary(); };
+    $("#r-plus", root).onclick = () => { servings = Math.min(50, servings + 0.5); summary(); };
     $("#r-total", root).oninput = summary;
     $("#r-q", root).oninput = () => {
       clearTimeout(timer);
@@ -1082,7 +1113,7 @@ function openRecipeImport(prop, meal) {
     <p class="note">Von ${esc(host)}. Prüf kurz die Zuordnung – jede Zutat wird ein Lebensmittel aus der Datenbank, damit Zucker, Fett und 0-Punkte-Gemüse stimmen.</p>
     <label class="f"><span>Name</span><input type="text" id="i-name" maxlength="120" value="${esc(prop.name)}"></label>
     <div class="grid2"><label class="f"><span>Portionen${prop.servings_known ? "" : " (bitte prüfen)"}</span>
-      <div class="stepper"><button class="btn icon small-icon" id="i-minus">−</button><b id="i-serv">${servings}</b><button class="btn icon small-icon" id="i-plus">+</button></div></label>
+      <div class="stepper"><button class="btn icon small-icon" id="i-minus">−</button><b id="i-serv">${num1.format(servings)}</b><button class="btn icon small-icon" id="i-plus">+</button></div></label>
       <label class="f"><span>Gewicht fertig (g, optional)</span>${decField('id="i-total" placeholder="Summe der Zutaten"', prop.total_g ? numIn.format(prop.total_g) : "")}</label></div>
     <ul class="list" id="i-items"></ul>
     <div class="card" id="i-sum" style="text-align:center"></div>
@@ -1104,7 +1135,7 @@ function openRecipeImport(prop, meal) {
       const used = items.filter(it => it.use && it.candidates.length);
       let kcal = 0, pts = 0;
       used.forEach(it => { const f = food(it), n = scaleFood(f, it.grams || 0); kcal += n.kcal; if (!f.zero) pts += rawPoints(n); });
-      $("#i-serv", root).textContent = servings;
+      $("#i-serv", root).textContent = num1.format(servings);
       const site = prop.nutrition && prop.nutrition.kcal ? (prop.nutrition_scope === "total" ? prop.nutrition.kcal / servings : prop.nutrition.kcal) : null;
       const ours = kcal / servings, diff = site ? Math.round((ours - site) / site * 100) : null;
       $("#i-sum", root).innerHTML = `<small class="muted">Pro Portion</small>
@@ -1130,8 +1161,8 @@ function openRecipeImport(prop, meal) {
       catch (err) { return toast(err.message); }
       it.search = term; it.pick = 0; it.use = it.candidates.length > 0; draw();
     });
-    $("#i-minus", root).onclick = () => { servings = Math.max(1, servings - 1); summary(); };
-    $("#i-plus", root).onclick = () => { servings = Math.min(50, servings + 1); summary(); };
+    $("#i-minus", root).onclick = () => { servings = Math.max(0.5, servings - 0.5); summary(); };
+    $("#i-plus", root).onclick = () => { servings = Math.min(50, servings + 0.5); summary(); };
     $("#i-save", root).onclick = async () => {
       const used = items.filter(it => it.use && it.candidates.length && it.grams > 0);
       if (!used.length) return toast("Mindestens eine Zutat auswählen");

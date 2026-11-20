@@ -537,10 +537,14 @@ async def log_copy(request: Request, device=Depends(auth.require)):
     data = await _json(request)
     src, dst = _day(data.get("from")), _day(data.get("to"))
     meal = data.get("meal") if data.get("meal") in diary.MEALS else None
+    ids = data.get("ids")   # optional: nur diese Einträge übernehmen
+    ids = {str(i) for i in ids} if isinstance(ids, list) else None
     with db.connect() as conn:
         rows = conn.execute("SELECT * FROM food_log WHERE day = ?" + (" AND meal = ?" if meal else ""),
                             (src, meal) if meal else (src,)).fetchall()
         for r in rows:
+            if ids is not None and r["id"] not in ids:
+                continue
             e = dict(r)
             e.update(id=str(uuid.uuid4()), day=dst, ts=db.iso(db.now_utc()))
             _upsert_entry(conn, e)
