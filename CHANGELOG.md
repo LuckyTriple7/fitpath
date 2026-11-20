@@ -6,6 +6,8 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+## [0.22.2] – 2026-11-20
+
 ### Behoben
 - Suche auf dem iPhone: Schickt die Tastatur „ö“, „ä“, „ü“ als zwei Zeichen (Buchstabe + Trema), fand die Suche nichts. Das wird jetzt vereinheitlicht.
 - Synonyme greifen schon beim Tippen (ab 6 Zeichen, z. B. „Pizzabröt“), mit Bindestrich („Pizza-Brötchen“) und mit ae/oe/ue („Pizzabroetchen“, „Kaese“). Vorher nur beim vollständigen Wort.
