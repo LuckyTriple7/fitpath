@@ -22,11 +22,12 @@ from . import __version__, db, points
 
 SEED = os.environ.get("BLS_SEED", os.path.join(os.path.dirname(os.path.dirname(__file__)), "seed", "bls40.csv.gz"))
 OFF_URL = "https://world.openfoodfacts.org/api/v2/product/{code}.json"
-OFF_FIELDS = "code,product_name,product_name_de,generic_name_de,brands,nutriments,serving_quantity,quantity"
+OFF_FIELDS = ("code,product_name,product_name_de,generic_name_de,brands,nutriments,serving_quantity,quantity,"
+              "product_quantity,product_quantity_unit")
 OFF_CONTACT = os.environ.get("OFF_CONTACT", "").strip()
 
 FOOD_COLS = ("id, source, code, name, brand, kcal, protein, fat, satfat, carbs, sugar, fiber, alcohol, salt, "
-             "zero_auto, zero_user, portions, serving_g, fav, hidden, pts_100")
+             "zero_auto, zero_user, portions, serving_g, package_g, fav, hidden, pts_100")
 
 
 def as_dict(row) -> dict:
@@ -267,8 +268,12 @@ def favorites(conn) -> list:
 
 
 def custom(conn) -> list:
+    """Eigene Lebensmittel, Gerichte und gescannte Produkte. Gescannte erst, wenn sie einmal erfasst,
+    als Favorit markiert oder mit eigener Portion versehen wurden (im Einkaufsmodus nur angeschaute
+    Produkte bleiben im Cache, damit der nächste Scan sofort geht, landen aber nicht in der Liste)."""
     return [as_dict(r) for r in conn.execute(
-        f"SELECT {FOOD_COLS} FROM foods WHERE source IN ('custom', 'off', 'recipe') AND hidden = 0 "
+        f"SELECT {FOOD_COLS} FROM foods WHERE hidden = 0 AND (source IN ('custom', 'recipe') OR (source = 'off' "
+        "AND (fav = 1 OR portions IS NOT NULL OR EXISTS (SELECT 1 FROM food_log WHERE food_log.food_id = foods.id)))) "
         "ORDER BY source = 'recipe' DESC, updated DESC LIMIT 200")]
 
 
@@ -449,6 +454,14 @@ _off_calls: list = []
 OFF_PER_MINUTE = 10   # erlaubt sind 15/min, etwas Luft lassen
 
 
+def off_wait() -> int:
+    """Sekunden, bis Open Food Facts wieder gefragt werden darf (0 = sofort)."""
+    with _off_lock:
+        now = time.monotonic()
+        recent = [t for t in _off_calls if now - t <= 60]
+        return 0 if len(recent) < OFF_PER_MINUTE else max(1, int(60 - (now - recent[0])) + 1)
+
+
 def _off_allowed() -> bool:
     with _off_lock:
         now = time.monotonic()
@@ -480,11 +493,16 @@ def off_map(product: dict) -> dict | None:
         return None
     alcohol = g("alcohol_100g")             # % vol
     name = (product.get("product_name_de") or product.get("product_name") or product.get("generic_name_de") or "").strip()
-    serving = product.get("serving_quantity")
-    try:
-        serving = float(serving) if serving not in (None, "") else None
-    except (TypeError, ValueError):
-        serving = None
+    def amount(v):
+        try:
+            v = float(v) if v not in (None, "") else None
+        except (TypeError, ValueError):
+            return None
+        return v if v and 0 < v <= 5000 else None
+    serving = amount(product.get("serving_quantity"))
+    # Packungsgröße (Einkaufsmodus: Punkte je Packung); ml wie g, andere Einheiten nicht
+    unit = str(product.get("product_quantity_unit") or "g").strip().lower()
+    package = amount(product.get("product_quantity")) if unit in ("g", "ml") else None
     return {
         "name": name[:120] or "Unbenanntes Produkt",
         "brand": (product.get("brands") or "").split(",")[0].strip()[:80] or None,
@@ -492,7 +510,8 @@ def off_map(product: dict) -> dict | None:
         "satfat": g("saturated-fat_100g"), "carbs": g("carbohydrates_100g"), "sugar": g("sugars_100g"),
         "fiber": g("fiber_100g"), "salt": g("salt_100g"),
         "alcohol": round(alcohol * 0.789, 2) if alcohol else None,   # % vol -> g je 100 ml
-        "serving_g": serving if serving and 0 < serving <= 5000 else None,
+        "serving_g": serving,
+        "package_g": package,
     }
 
 
@@ -508,7 +527,7 @@ def barcode(conn, code: str) -> dict:
                 conn.execute("UPDATE foods SET hidden = 0, updated = ? WHERE id = ?", (db.iso(db.now_utc()), row["id"]))
             return {"status": "found", "food": as_dict(row)}
     if not _off_allowed():
-        return {"status": "busy"}
+        return {"status": "busy", "retry": off_wait(), "limit": OFF_PER_MINUTE}
     ua = f"FitPath/{__version__}" + (f" ({OFF_CONTACT})" if OFF_CONTACT else "")
     try:
         r = httpx2.get(OFF_URL.format(code=code), params={"fields": OFF_FIELDS},
@@ -529,8 +548,9 @@ def barcode(conn, code: str) -> dict:
     now = db.iso(db.now_utc())
     cur = conn.execute(
         "INSERT INTO foods (source, code, name, brand, kcal, protein, fat, satfat, carbs, sugar, fiber, alcohol, salt, "
-        "serving_g, zero_auto, created, updated) VALUES ('off', :code, :name, :brand, :kcal, :protein, :fat, :satfat, "
-        ":carbs, :sugar, :fiber, :alcohol, :salt, :serving_g, 0, :now, :now)", {**mapped, "code": code, "now": now})
+        "serving_g, package_g, zero_auto, created, updated) VALUES ('off', :code, :name, :brand, :kcal, :protein, :fat, "
+        ":satfat, :carbs, :sugar, :fiber, :alcohol, :salt, :serving_g, :package_g, 0, :now, :now)",
+        {**mapped, "code": code, "now": now})
     return {"status": "found", "food": get(conn, cur.lastrowid), "new": True}
 
 

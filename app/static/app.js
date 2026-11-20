@@ -240,12 +240,13 @@ async function render() {
   if (!S.settings.onboarded) { $("#tabbar").hidden = true; return viewOnboarding(); }
   $("#tabbar").hidden = false;
   $("#sos-top").hidden = false;
-  if (route === "erfassen" || route === "scannen" || route === "wiegen" || route === "sos") {
+  if (route === "erfassen" || route === "scannen" || route === "einkauf" || route === "wiegen" || route === "sos") {
     history.replaceState(null, "", "#heute");
     viewToday();
     $$(".tabbar a").forEach(a => a.classList.toggle("active", a.dataset.tab === "heute"));
     if (route === "erfassen") openAdd(mealNow());
     if (route === "scannen") openScan(mealNow());
+    if (route === "einkauf") openShop();
     if (route === "wiegen") openWeigh();
     if (route === "sos") openSOS();
     return;
@@ -976,7 +977,7 @@ function foodList(items) {
 
 /* ---------- Erfassen: Menge ---------- */
 
-function openAmount(food, meal, entry = null) {
+function openAmount(food, meal, entry = null, back = null) {
   const portions = [...(food.portions || [])];
   const def = portions[food.source === "eatout" && portions[1] ? 1 : 0];   // Teller: „normal“ statt „klein“
   let grams = entry ? entry.grams : (food.last_grams || (def ? def.g : 100));
@@ -987,7 +988,8 @@ function openAmount(food, meal, entry = null) {
   if (portion && !portions.some(p => p.name === portion)) portion = null;
   const src = { bls: "BLS 4.0", off: "Open Food Facts", custom: "Eigenes", recipe: "Gericht", eatout: "🍽️ Auswärts" }[food.source] || "";
 
-  openSheet(`<div class="spread"><h2 style="margin:0">${esc(food.name)}</h2>
+  openSheet(`${back ? `<button class="linkbtn" id="back" style="margin-bottom:6px">‹ Zurück zum Einkauf</button>` : ""}
+    <div class="spread"><h2 style="margin:0">${esc(food.name)}</h2>
       <button class="btn icon small-icon" id="fav" aria-label="Favorit">${food.fav ? "★" : "☆"}</button></div>
     <div class="row" style="margin-top:4px"><span class="pill">${esc(src)}</span>${food.brand ? `<span class="pill">${esc(food.brand)}</span>` : ""}
       <span class="pill"><span class="dot ${food.ampel}"></span>${AMPEL_LABEL[food.ampel]}</span>${food.zero ? `<span class="pill good">0 Punkte</span>` : ""}</div>
@@ -1056,12 +1058,14 @@ function openAmount(food, meal, entry = null) {
       vibrate(30); lists = null;
       closeSheet(); viewToday();
       toast(entry ? "Gespeichert" : `${shortName(food.name)} erfasst`);
+      if (back) back();
     };
     $("#del", root) && ($("#del", root).onclick = async () => {
       try { await deleteEntry(entry.id); } catch (err) { return toast(err.message); }
       closeSheet(); viewToday();
       toast("Gelöscht", 6000, [{ label: "Rückgängig", fn: async () => { await saveEntry({ ...entry, portion: entry.portion }); viewToday(); } }]);
     });
+    $("#back", root) && ($("#back", root).onclick = back);
     $("#fav", root).onclick = async () => {
       try { const f = await api(`/api/foods/${food.id}`, { method: "PUT", body: { fav: !food.fav } }); food.fav = f.fav; lists = null; }
       catch (err) { return toast(err.message); }
@@ -1077,7 +1081,7 @@ function openAmount(food, meal, entry = null) {
       const own = (food.portions || []).filter(p => p.name !== name).slice(0, 3);
       try { const f = await api(`/api/foods/${food.id}`, { method: "PUT", body: { portions: [{ name, g: grams }, ...own] } }); food.portions = f.portions; }
       catch (err) { return toast(err.message); }
-      toast("Portion gemerkt"); openAmount(food, chipVal(root, "meal") || meal, entry);
+      toast("Portion gemerkt"); openAmount(food, chipVal(root, "meal") || meal, entry, back);
     };
     $("#edit", root) && ($("#edit", root).onclick = () => openCustom(food, chipVal(root, "meal") || meal));
     $("#edit-recipe", root) && ($("#edit-recipe", root).onclick = async () => {
@@ -1447,6 +1451,42 @@ function barcodeDetector() {
 }
 const eanOf = codes => (codes.find(x => /^\d{8,14}$/.test(x.rawValue)) || {}).rawValue;
 
+// Live-Kamera im Element #cam mit Barcode-Erkennung. onCode(code) bei jedem Treffer, onState("loading" | "ready" | Fehler).
+// Liefert sofort ein Objekt mit stop(). wake: Bildschirm anlassen (Einkaufsmodus), wo der Browser es kann.
+function liveScan(root, onCode, onState, wake = false) {
+  const ctl = { stream: null, timer: null, stopped: false, lock: null };
+  ctl.stop = () => {
+    ctl.stopped = true; clearInterval(ctl.timer);
+    if (ctl.stream) ctl.stream.getTracks().forEach(t => t.stop());
+    ctl.stream = null;
+    if (ctl.lock) { ctl.lock.release().catch(() => {}); ctl.lock = null; }
+  };
+  (async () => {
+    if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) return onState(new Error("keine Kamera"));
+    try {
+      const detP = barcodeDetector();   // lädt parallel zum Kamerastart
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1280 } }, audio: false });
+      if (ctl.stopped || $("#sheet").hidden) { stream.getTracks().forEach(t => t.stop()); return; }
+      ctl.stream = stream;
+      const v = $("#cam", root); v.srcObject = stream; await v.play();
+      onState("loading");
+      const det = await detP;
+      if (ctl.stopped) return;
+      if (wake && navigator.wakeLock) { try { ctl.lock = await navigator.wakeLock.request("screen"); } catch (_) { /* egal */ } }
+      onState("ready");
+      let busy = false;
+      ctl.timer = setInterval(async () => {
+        if (ctl.stopped || busy || v.readyState < 2) return;
+        busy = true;
+        try { const c = eanOf(await det.detect(v)); if (c) onCode(c); } catch (_) { /* nächster Versuch */ }
+        busy = false;
+      }, 250);
+    } catch (err) { ctl.stop(); onState(err || new Error("Kamera")); }
+  })();
+  return ctl;
+}
+const camError = err => err && err.name === "NotAllowedError" ? "Kamera nicht erlaubt" : "Live-Scan geht hier nicht";
+
 function openScan(meal) {
   const live = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
   openSheet(`<h2>📷 Barcode scannen</h2>
@@ -1454,11 +1494,13 @@ function openScan(meal) {
     <p class="note center" id="scan-hint">${live ? "Kamera startet …" : "Foto vom Barcode machen oder die Zahl darunter eintippen."}</p>
     <button class="btn block" id="snap">📸 Foto vom Barcode</button>
     <input type="file" accept="image/*" capture="environment" id="snap-file" hidden>
-    <div class="row nowrap mt"><input type="text" inputmode="numeric" id="code" class="grow" placeholder="Zahl unter dem Strichcode"><button class="btn primary" id="go">Suchen</button></div>`, async root => {
-    let stream = null, timer = null, done = false, busy = false;
+    <div class="row nowrap mt"><input type="text" inputmode="numeric" id="code" class="grow" placeholder="Zahl unter dem Strichcode"><button class="btn primary" id="go">Suchen</button></div>
+    <button class="btn block mt" id="to-shop">🛒 Einkaufsmodus: viele Produkte nacheinander anschauen</button>`, async root => {
+    let cam = null, done = false;
     const hint = t => { const h = $("#scan-hint", root); if (h) h.textContent = t; };
-    const stop = () => { clearInterval(timer); if (stream) stream.getTracks().forEach(t => t.stop()); stream = null; };
+    const stop = () => { if (cam) cam.stop(); };
     sheetCleanup = stop;
+    $("#to-shop", root).onclick = () => { stop(); openShop(); };
     const lookup = async code => {
       if (done) return; done = true; stop(); vibrate(60);
       hint(`Suche ${code} …`);
@@ -1492,28 +1534,121 @@ function openScan(meal) {
     };
 
     if (!live) return;
-    try {
-      const detP = barcodeDetector();   // lädt parallel zum Kamerastart
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1280 } }, audio: false });
-      if ($("#sheet").hidden) return stop();
-      const v = $("#cam", root); v.srcObject = stream; await v.play();
-      hint("Scanner wird geladen …");
-      const det = await detP;
-      if (!stream) return;
-      hint("Barcode in den Rahmen halten …");
-      timer = setInterval(async () => {
-        if (done || busy || v.readyState < 2) return;
-        busy = true;
-        try { const c = eanOf(await det.detect(v)); if (c) lookup(c); } catch (_) { /* nächster Versuch */ }
-        busy = false;
-      }, 250);
-    } catch (err) {
-      stop();
-      $("#scan-box", root) && ($("#scan-box", root).hidden = true);
-      hint(err && err.name === "NotAllowedError" ? "Kamera nicht erlaubt – Foto vom Barcode machen oder Zahl eintippen."
-        : "Live-Scan geht hier nicht – Foto vom Barcode machen oder Zahl eintippen.");
-    }
+    cam = liveScan(root, lookup, st => {
+      if (st === "loading") hint("Scanner wird geladen …");
+      else if (st === "ready") hint("Barcode in den Rahmen halten …");
+      else { $("#scan-box", root) && ($("#scan-box", root).hidden = true); hint(`${camError(st)} – Foto vom Barcode machen oder Zahl eintippen.`); }
+    });
   });
+}
+
+/* ---------- Einkaufsmodus: Kamera bleibt an, jedes Produkt kommt in die Liste ---------- */
+
+// Liste bleibt, solange die App offen ist (auch nach „Erfassen“ und zurück)
+const shop = { items: [], queue: [], waitUntil: 0, timer: null, render: null };
+
+function shopAdd(code) {
+  const now = Date.now(), have = shop.items.find(x => x.code === code);
+  if (have) {   // schon in der Liste: nach oben holen, nicht neu fragen
+    const still = now - have.seen < 4000; have.seen = now;
+    if (still) return;   // liegt noch im Bild: nichts tun, erst nach 4 s Pause wieder nach oben
+    shop.items = [have, ...shop.items.filter(x => x !== have)];
+    vibrate(20); return shop.render && shop.render(code);
+  }
+  vibrate(60);
+  shop.items.unshift({ code, seen: now, status: "loading" });
+  shop.items = shop.items.slice(0, 60);
+  shopLookup(shop.items[0]);
+}
+
+async function shopLookup(it) {
+  if (Date.now() < shop.waitUntil) { it.status = "queued"; shop.queue.push(it); return shopTick(); }
+  it.status = "loading"; shop.render && shop.render();
+  let r;
+  try { r = await api(`/api/foods/barcode/${encodeURIComponent(it.code)}`); }
+  catch (_) { it.status = "offline"; return shop.render && shop.render(); }
+  if (r.status === "busy") {
+    shop.waitUntil = Date.now() + (r.retry || 10) * 1000;
+    it.status = "queued"; shop.queue.push(it);
+    return shopTick();
+  }
+  if (r.status === "found") { it.status = "found"; it.food = r.food; lists = null; }
+  else if (r.status === "unknown") { it.status = "unknown"; it.name = r.name || ""; }
+  else it.status = r.status === "invalid" ? "invalid" : "offline";
+  shop.render && shop.render();
+}
+
+// Wartezeit von Open Food Facts herunterzählen, danach die Warteschlange abarbeiten
+function shopTick() {
+  shop.render && shop.render();
+  if (shop.timer) return;
+  shop.timer = setInterval(() => {
+    if (Date.now() >= shop.waitUntil) {
+      clearInterval(shop.timer); shop.timer = null;
+      const q = shop.queue.splice(0);
+      q.forEach(it => shopLookup(it));
+    }
+    shop.render && shop.render();
+  }, 1000);
+}
+
+function shopRow(it) {
+  const P = isPoints();
+  const amount = (g, label) => g ? `${label} ${num.format(g)}&nbsp;g&nbsp;= <strong>${P ? pointsFor(it.food, g) + " P" : Math.round(it.food.kcal * g / 100) + " kcal"}</strong>` : "";
+  if (it.status === "found") {
+    const f = it.food, extra = [amount(f.serving_g, "Portion"), f.package_g && f.package_g !== f.serving_g ? amount(f.package_g, "Packung") : ""].filter(Boolean).join(" · ");
+    return `<li class="tap" data-shop="${esc(it.code)}"><span class="dot ${f.ampel}"></span>
+      <div class="bd"><b>${esc(f.name)}</b><div class="meta">${[f.brand ? esc(f.brand) : "", extra].filter(Boolean).join(" · ")}</div></div>
+      <span class="val">${f.zero ? `<span class="zero">0 P</span>` : P ? `${f.points_100} P` : `${Math.round(f.kcal)} kcal`}<div class="meta" style="font-weight:400">je 100 g</div></span></li>`;
+  }
+  const txt = { loading: "wird gesucht …", queued: "kommt gleich …", unknown: "unbekannt – antippen zum Anlegen",
+    offline: "nicht erreichbar – antippen für neuen Versuch", invalid: "Barcode ungültig" }[it.status];
+  return `<li class="tap" data-shop="${esc(it.code)}"><span class="dot" style="background:var(--card-2)"></span>
+    <div class="bd"><b>${it.name ? esc(it.name) : esc(it.code)}</b><div class="meta">${txt}</div></div>
+    <span class="val muted">${it.status === "unknown" ? "?" : it.status === "loading" || it.status === "queued" ? "…" : "!"}</span></li>`;
+}
+
+function openShop() {
+  const live = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  openSheet(`<div class="spread"><h2 style="margin:0">🛒 Einkauf</h2><button class="btn small" id="shop-done">Fertig</button></div>
+    ${live ? `<div class="scan shop" id="scan-box"><video id="cam" playsinline muted></video><div class="frame"></div></div>` : ""}
+    <p class="note center" id="scan-hint" style="margin:4px 0">${live ? "Kamera startet …" : "Live-Scan geht hier nicht."}</p>
+    <div class="shop-wait" id="shop-wait" hidden></div>
+    <ul class="list" id="shop-list"></ul>
+    <div class="row nowrap mt" id="shop-foot"><button class="btn small" id="shop-clear">Liste leeren</button>
+      <small class="muted grow" style="text-align:right">Antippen zum Erfassen</small></div>`, root => {
+    let cam = null;
+    const hint = t => { const h = $("#scan-hint", root); if (h) h.textContent = t; };
+    shop.render = flash => {
+      if (!$("#shop-list", root) || !root.isConnected) return;
+      $("#shop-list", root).innerHTML = shop.items.length ? shop.items.map(shopRow).join("")
+        : `<li><div class="bd muted">Noch nichts gescannt. Barcode in den Rahmen halten, die Kamera bleibt an.</div></li>`;
+      $("#shop-foot", root).hidden = !shop.items.length;
+      const wait = Math.ceil((shop.waitUntil - Date.now()) / 1000), box = $("#shop-wait", root);
+      box.hidden = !(wait > 0 && shop.queue.length);
+      if (!box.hidden) box.innerHTML = `⏳ <b>Bitte kurz warten.</b> Open Food Facts erlaubt FitPath nur 10 Abfragen pro Minute. ${shop.queue.length} ${shop.queue.length === 1 ? "Produkt wird" : "Produkte werden"} in ${wait} s nachgeladen. Schon bekannte Produkte gehen sofort.`;
+      if (flash) { const li = $(`[data-shop="${CSS.escape(flash)}"]`, root); li && li.classList.add("flash"); }
+    };
+    const stop = () => { if (cam) cam.stop(); };
+    sheetCleanup = () => { stop(); shop.render = null; };
+    shop.render();
+    const reopen = () => openShop();
+    $("#shop-done", root).onclick = closeSheet;
+    $("#shop-clear", root).onclick = () => { shop.items = []; shop.queue = []; shop.render(); };
+    $("#shop-list", root).onclick = e => {
+      const li = e.target.closest("[data-shop]"); if (!li) return;
+      const it = shop.items.find(x => x.code === li.dataset.shop); if (!it) return;
+      if (it.status === "found") { stop(); return openAmount(it.food, mealNow(), null, reopen); }
+      if (it.status === "unknown") { stop(); return openCustom({ code: it.code, name: it.name || "" }, mealNow(), "Bei Open Food Facts nicht gefunden. Werte von der Packung abtippen – beim nächsten Scan kennt FitPath das Produkt."); }
+      if (it.status === "offline") shopLookup(it);
+    };
+    if (!live) return;
+    cam = liveScan(root, shopAdd, st => {
+      if (st === "loading") hint("Scanner wird geladen …");
+      else if (st === "ready") hint("Einfach ein Produkt nach dem anderen in den Rahmen halten.");
+      else { $("#scan-box", root) && ($("#scan-box", root).hidden = true); hint(`${camError(st)}.`); }
+    }, true);
+  }, true);
 }
 
 /* ---------- Schritte von Hand ---------- */

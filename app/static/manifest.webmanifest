@@ -17,6 +17,7 @@
   "shortcuts": [
     { "name": "Erfassen", "short_name": "Erfassen", "url": "/#erfassen" },
     { "name": "Barcode scannen", "short_name": "Scannen", "url": "/#scannen" },
+    { "name": "Einkaufsmodus", "short_name": "Einkauf", "url": "/#einkauf" },
     { "name": "Gewicht eintragen", "short_name": "Wiegen", "url": "/#wiegen" },
     { "name": "Heißhunger-SOS", "short_name": "SOS", "url": "/#sos" }
   ]
