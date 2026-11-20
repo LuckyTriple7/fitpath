@@ -6,6 +6,9 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+### Neu
+- **Design wählbar**: Mehr → Anzeige → System / Hell / Dunkel. Gilt pro Gerät (im Browser gespeichert), „System“ folgt wie bisher der Einstellung des Handys. Die Farbe der Statusleiste wechselt mit.
+
 ## [0.22.2] – 2026-11-20
 
 ### Behoben

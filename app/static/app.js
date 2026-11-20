@@ -5,6 +5,19 @@ const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const view = $("#view");
 
+/* Design je Gerät: system | light | dark (im Browser gespeichert, nicht auf dem Server) */
+const THEME_COLOR = { dark: "#0f1115", light: "#f6f5f2" };
+function applyTheme(t) {
+  const root = document.documentElement;
+  if (t === "light" || t === "dark") root.dataset.theme = t; else delete root.dataset.theme;
+  // Statusleiste: bei fester Wahl beide Meta-Tags auf dieselbe Farbe, sonst je nach System
+  $$('meta[name="theme-color"]').forEach(m => {
+    m.content = THEME_COLOR[t] || (m.media.includes("dark") ? THEME_COLOR.dark : THEME_COLOR.light);
+  });
+}
+function savedTheme() { try { return localStorage.getItem("fp_theme") || "system"; } catch (_) { return "system"; } }
+applyTheme(savedTheme());
+
 let S = null;              // Zustand vom Server
 let curDay = null;         // angezeigter Tag (null = heute)
 let statsRange = 30;
@@ -2046,6 +2059,8 @@ async function viewMore() {
       <p class="note">Grundumsatz ${num.format(b.bmr)} kcal × Aktivität ${String(s.activity).replace(".", ",")}${b.adjust ? ` ${b.adjust > 0 ? "+" : "−"} ${num.format(Math.abs(b.adjust))} kcal Korrektur (Statistik → Echter Bedarf)` : ""} = ${num.format(b.tdee)} kcal Bedarf${b.deficit ? ` − ${num.format(b.deficit)} kcal Defizit` : ""} = <b>${num.format(b.target)} kcal</b> = <b>${b.points} Punkte</b> pro Tag (bei ${num1.format(b.weight)} kg).
       ${b.floor_hit ? `Untergrenze ${num.format(b.floor)} kcal greift – weniger wäre auf Dauer nicht gesund.` : ""}</p></div>
     <div class="card"><h2>Anzeige</h2>${chipGroup("display", [["points", "Punkte"], ["kcal", "Kalorien"]], s.display)}
+      <label class="f mt"><span>Design (nur dieses Gerät)</span></label>
+      ${chipGroup("theme", [["system", "📱 System"], ["light", "☀️ Hell"], ["dark", "🌙 Dunkel"]], savedTheme())}
       <details class="more mt"><summary>So rechnet FitPath</summary>
         <p class="note"><b>Punkte je Eintrag</b> = kcal ÷ 35 + gesättigtes Fett ÷ 4 + Zucker ÷ 10 + Alkohol ÷ 8 − Eiweiß ÷ 10 − Ballaststoffe ÷ 5 (Gramm, nie unter 0, gerundet). Eiweiß und Ballaststoffe machen satt und senken die Punkte, Zucker, gesättigtes Fett und Alkohol erhöhen sie.</p>
         <p class="note"><b>0 Punkte</b>: frisches Obst und Gemüse, Pilze, Sprossen, gegarte Hülsenfrüchte (nicht Saft, Trockenobst, Konserven mit Zucker). Pro Lebensmittel änderbar.</p>
@@ -2088,6 +2103,11 @@ async function viewMore() {
       <p class="note">FitPath ersetzt keine ärztliche Beratung. Bei Vorerkrankungen, Schwangerschaft oder Essstörungen das Vorgehen mit Arzt oder Ärztin abstimmen.</p></div>`;
 
   bindChips(view, async (group, val) => {
+    if (group === "theme") {
+      try { localStorage.setItem("fp_theme", val); } catch (_) { /* privates Fenster: gilt bis zum Neuladen */ }
+      applyTheme(val);
+      return;
+    }
     if (group === "display") { S = await api("/api/settings", { method: "PUT", body: { display: val } }); toast(val === "kcal" ? "Anzeige in kcal" : "Anzeige in Punkten"); }
   });
   $("#edit-goals").onclick = openGoals;

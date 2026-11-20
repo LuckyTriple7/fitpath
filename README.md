@@ -84,6 +84,7 @@ git push --follow-tags            # GitHub testet, prüft Tag = Version, baut da
 | Statistik | Echter Bedarf aus Einträgen und Gewicht (siehe [Punktesystem](#punktesystem)), Punkte oder kcal pro Tag gegen Budget, Tage im Budget, Ø Eiweiß/Ballaststoffe mit Richtwert, Energiedichte-Ampel, Heißhunger (überstanden, Auslöser, worauf Lust und wie oft getauscht, typische Uhrzeiten), größte Punkte-Lieferanten, Schritte, Training (Trainingstage, Zeit, Punkte, Minuten pro Tag, je Sportart) |
 | Health Connect | Webhook für Life Dashboard Companion: Schritte (Tagessummen), Trainingseinheiten, Gewicht, Körperfett, Löschungen, Verlauf nachladen |
 | Push | Wiegen (Wochentage wählbar), „noch nichts erfasst“ am Mittag, etwa 15 Minuten vor typischen Snack-Uhrzeiten (gelernt aus Snack-Einträgen und Heißhunger der letzten 3 Wochen, ab 3 Tagen je Stunde), Abend-Check; Ruhezeiten und Höchstzahl pro Tag |
+| Design | Hell und dunkel nach Systemeinstellung, unter **Mehr → Anzeige** pro Gerät fest wählbar (System / Hell / Dunkel, gespeichert im Browser); Statusleisten-Farbe passend |
 | Offline | App-Hülle und letzter Zustand aus dem Cache, Einträge warten in einer Warteschlange |
 
 ## Rezept-Import per Link
