@@ -6,6 +6,9 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+### Neu
+- **💡 Passt noch** auf Heute (ab 15 Uhr, ab 2 übrigen Punkten bzw. 70 kcal): Vorschläge aus deinen Favoriten, zuletzt Gegessenem und gespeicherten Mahlzeiten in der üblichen Menge, die in die übrigen Punkte passen. Satt machendes zuerst (grüne Ampel, viel Eiweiß), dazu ein 0-Punkte-Lebensmittel (sonst ein Apfel). Ein Tipp erfasst, mit „Rückgängig“.
+
 ## [0.21.0] – 2026-11-20
 
 ### Neu

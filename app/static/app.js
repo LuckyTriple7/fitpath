@@ -396,6 +396,7 @@ function viewToday() {
     </div>
     ${challengeHtml()}
     ${levelHtml()}
+    ${fitsHtml(left)}
     ${quickHtml()}
     ${MEALS.map(([key, label, icon]) => mealHtml(key, label, icon)).join("")}
     ${activityHtml()}
@@ -413,6 +414,7 @@ function viewToday() {
     if (e) openEntry(e);
   }));
   $$("[data-quick]").forEach(bt => (bt.onclick = () => quickAdd(+bt.dataset.quick)));
+  $$("[data-fit]").forEach(bt => (bt.onclick = () => fitAdd(bt.dataset.fit)));
   $$("[data-copy]").forEach(bt => (bt.onclick = () => openCopy(bt.dataset.copy)));
   $$("[data-keep]").forEach(bt => (bt.onclick = () => {
     const meal = bt.dataset.keep, list = o.entries.filter(e => e.meal === meal && e.food_id);
@@ -454,6 +456,37 @@ async function goDay(day) {
   curDay = day === S.today ? null : day;
   try { await loadState(); } catch (e) { return toast("Offline – Tag nicht geladen"); }
   viewToday();
+}
+
+/* „Was passt noch?“: eigene Favoriten, Zuletzt und gespeicherte Mahlzeiten, die in die übrigen Punkte passen.
+   Ab 15 Uhr, nur heute. Satt machendes zuerst (grüne Ampel, viel Eiweiß je kcal), dazu ein 0-Punkte-Lebensmittel. */
+const FITS_FROM_HOUR = 15;
+function fitList(left) {
+  const P = isPoints(), val = x => P ? x.points : x.kcal;
+  const ok = (S.fits || []).filter(x => val(x) <= left);
+  const zero = ok.find(x => x.zero);
+  const score = x => ({ green: 2, yellow: 1, red: 0 }[x.ampel] || 0) + Math.min(x.protein / Math.max(x.kcal, 1) * 100 / 4, 2)
+    + (x.fav ? 0.5 : 0) + Math.min(val(x) / Math.max(left, 1), 1);
+  const rest = ok.filter(x => !x.zero && val(x) > 0).sort((a, b) => score(b) - score(a)).slice(0, 5);
+  return zero ? [...rest, zero] : rest;
+}
+function fitsHtml(left) {
+  const P = isPoints();
+  if (curDay || new Date().getHours() < FITS_FROM_HOUR || left < (P ? 2 : 70)) return "";
+  const list = fitList(left);
+  if (!list.length) return "";
+  return `<div class="card" style="padding:12px 16px"><div class="spread"><h3 style="margin:0">💡 Passt noch</h3><small>${num.format(left)} ${unit()} übrig · ein Tipp → ${esc(MEAL_LABEL[mealNow()])}</small></div>
+    <div class="chips scroll" style="margin-top:8px">${list.map(x => `<button class="chip" data-fit="${x.kind}:${esc(String(x.id))}">${x.kind === "tpl" ? "⭐ " : ""}${esc(shortName(x.name))}${x.kind === "food" ? ` · ${x.portion ? esc(x.portion) : fmtG(x.grams)}` : ""} · ${x.zero && P ? "0 P" : fmtVal(x.points, x.kcal)}</button>`).join("")}</div></div>`;
+}
+async function fitAdd(key) {
+  const [kind, id] = [key.slice(0, key.indexOf(":")), key.slice(key.indexOf(":") + 1)];
+  const x = (S.fits || []).find(f => f.kind === kind && String(f.id) === id); if (!x) return;
+  if (kind === "tpl") { const t = (S.templates || []).find(t => t.id === id); return t && logTemplate(t, mealNow()); }
+  const e = { id: uuid(), food_id: x.id, grams: x.grams, portion: x.portion, meal: mealNow(), day: S.today };
+  vibrate(30);
+  if (!(await saveEntry(e))) return;
+  viewToday();
+  toast(`${shortName(x.name)} erfasst`, 6000, [{ label: "Rückgängig", fn: async () => { await deleteEntry(e.id); viewToday(); } }]);
 }
 
 function quickHtml() {

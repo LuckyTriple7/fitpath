@@ -37,7 +37,7 @@ def clean(conn, data: dict) -> dict:
 
 
 def _out(conn, row) -> dict:
-    items, pts, kcal = [], 0, 0.0
+    items, pts, kcal, protein, grams = [], 0, 0.0, 0.0, 0.0
     for it in json.loads(row["items"]):
         f = foods.get(conn, it["food_id"])
         if not f:                      # Lebensmittel inzwischen gelöscht
@@ -50,8 +50,11 @@ def _out(conn, row) -> dict:
                       "kcal": round(n["kcal"]), "ampel": f["ampel"]})
         pts += p
         kcal += n["kcal"]
+        protein += n["protein"] or 0
+        grams += it["grams"]
     return {"id": row["id"], "name": row["name"], "meal": row["meal"], "uses": row["uses"],
-            "items": items, "points": pts, "kcal": round(kcal)}
+            "items": items, "points": pts, "kcal": round(kcal), "protein": round(protein, 1),
+            "ampel": points.ampel(kcal / grams * 100 if grams else 0)}
 
 
 def list_all(conn) -> list:
@@ -86,6 +89,45 @@ def save(conn, data: dict, tid: str | None = None) -> str:
 
 def delete(conn, tid: str) -> bool:
     return conn.execute("DELETE FROM meal_templates WHERE id = ?", (tid,)).rowcount > 0
+
+
+def fit_candidates(conn, templates: list | None = None) -> list:
+    """Kandidaten für „Was passt noch?“: nur eigene Sachen (Favoriten, zuletzt Gegessenes, gespeicherte
+    Mahlzeiten), jeweils in der üblichen Menge. Was davon in die übrigen Punkte passt und wie es sortiert
+    wird, entscheidet die Oberfläche (sie kennt die Anzeige Punkte/kcal). Fehlt ein 0-Punkte-Lebensmittel,
+    kommt ein Apfel dazu."""
+    recent = foods.recent(conn, 30)
+    last = {f["id"]: f for f in recent}
+    out, seen = [], set()
+    for f in foods.favorites(conn) + recent:
+        if f["id"] in seen:
+            continue
+        seen.add(f["id"])
+        r = last.get(f["id"])
+        if r:
+            grams, portion = r["last_grams"], r["last_portion"]
+        elif f["portions"]:
+            grams, portion = f["portions"][0]["g"], f["portions"][0]["name"]
+        else:
+            continue                   # Favorit ohne Portion und nie gegessen: keine sinnvolle Menge
+        out.append(_candidate(f, grams, portion))
+    if not any(c["zero"] for c in out):
+        apple = next((f for f in foods.search(conn, "apfel", 5) if f["zero"] and f["portions"]), None)
+        if apple:
+            out.append(_candidate(apple, apple["portions"][0]["g"], apple["portions"][0]["name"]))
+    for t in templates if templates is not None else list_all(conn):
+        if t["items"]:
+            out.append({"kind": "tpl", "id": t["id"], "name": t["name"], "points": t["points"], "kcal": t["kcal"],
+                        "protein": t["protein"], "ampel": t["ampel"], "zero": False, "fav": True})
+    return out
+
+
+def _candidate(f: dict, grams: float, portion: str | None) -> dict:
+    n = points.scale(f, grams)
+    e = {**n, "zero": f["zero"], "points_raw": f["pts_100"] * grams / 100 if f.get("pts_100") is not None else None}
+    return {"kind": "food", "id": f["id"], "name": f["name"], "grams": grams, "portion": portion,
+            "points": points.entry_points(e), "kcal": round(n["kcal"]), "protein": round(n["protein"] or 0, 1),
+            "ampel": f["ampel"], "zero": f["zero"], "fav": bool(f.get("fav"))}
 
 
 def items_for_log(conn, tid: str, skip=()) -> list:

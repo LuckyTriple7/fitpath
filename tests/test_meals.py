@@ -58,3 +58,27 @@ def test_meal_templates():
     assert c.delete(f"/api/templates/{t['id']}", headers=H).status_code == 404
     assert c.post("/api/templates/nix/log", headers=H, json={}).status_code == 404
     c.__exit__(None, None, None)
+
+
+def test_fit_candidates():
+    c = client()
+    with db.connect() as conn:
+        conn.execute("DELETE FROM meal_templates")
+        conn.execute("DELETE FROM food_log")
+        conn.execute("UPDATE foods SET fav = 0")
+    st = c.get("/api/state").json()
+    # nichts gegessen, keine Favoriten: nur der Apfel als 0-Punkte-Vorschlag
+    assert [x["name"].split(",")[0].split(" ")[0] for x in st["fits"]] == ["Apfel"] and st["fits"][0]["zero"]
+    skyr = food(c, "skyr")
+    c.post("/api/log", headers=H, json={"id": "f1", "food_id": skyr["id"], "grams": 150, "meal": "snack"})
+    brot = food(c, "roggenvollkornbrot")
+    c.put(f"/api/foods/{brot['id']}", headers=H, json={"fav": True})
+    c.post("/api/templates", headers=H, json={"name": "Mein Snack", "items": [{"food_id": skyr["id"], "grams": 150}]})
+    fits = c.get("/api/state").json()["fits"]
+    by = {(x["kind"], x["name"]): x for x in fits}
+    s = next(x for x in fits if x["id"] == skyr["id"])
+    assert s["grams"] == 150 and s["points"] >= 0 and s["protein"] > 10        # übliche Menge
+    b = next(x for x in fits if x["id"] == brot["id"])
+    assert b["fav"] and b["grams"] > 0 and b["portion"]                         # Favorit mit erster Portion
+    assert ("tpl", "Mein Snack") in by and by[("tpl", "Mein Snack")]["protein"] > 10
+    c.__exit__(None, None, None)
