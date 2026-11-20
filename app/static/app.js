@@ -379,7 +379,8 @@ function viewToday() {
       <button class="btn icon small-icon" id="next" aria-label="Tag vor" ${isToday ? "disabled" : ""}>›</button></div>
     <div class="card hero">
       <div class="ring toggle" id="ring" role="button" tabindex="0" aria-label="Anzeige umschalten auf ${P ? "Kalorien" : "Punkte"}">${ringSvg(used / Math.max(budget + bonus, 1), over)}
-        <div class="t${over ? " over" : ""}"><b>${num.format(left)}</b><span>${P ? "Punkte übrig" : "kcal übrig"}</span></div></div>
+        <div class="t${over ? " over" : ""}"><b>${num.format(left)}</b><span>${P ? "Punkte übrig" : "kcal übrig"}</span>
+          <small class="used"><b>${num.format(used)}</b> verbraucht</small></div></div>
       ${left < 0 && fromRes ? `<p><span class="pill warn">${num.format(fromRes)} ${unit()} aus der Wochenreserve</span></p>` : ""}
       <div class="tiles three">
         <div class="tile"><div class="v">${num.format(budget)}</div><div class="l">Budget</div></div>
