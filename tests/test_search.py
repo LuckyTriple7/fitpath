@@ -28,3 +28,13 @@ def test_everyday_terms():
 def test_grapes_have_portions_not_wine():
     p = top("weintraube")
     assert p["name"].startswith("Weintraube") and p["portions"][0]["name"] == "1 Handvoll"
+
+
+def test_pizzabroetchen():
+    for q in ("pizzabrötchen", "Pizza Brötchen"):
+        p = top(q)
+        assert p["name"].startswith("Pizzabaguette"), (q, p["name"])
+    assert top("pizzabrötchen")["portions"][0]["name"] == "1 Pizzabrötchen (Hälfte)"   # nicht „1 Pizza“ (350 g)
+    with db.connect() as conn:
+        salami = next(f for f in foods.search(conn, "pizza salami", 10) if f["source"] == "bls")
+    assert salami["portions"][0]["name"] == "1 Pizza"                                   # echte Pizza unverändert

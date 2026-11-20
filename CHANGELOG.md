@@ -6,6 +6,10 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+### Behoben
+- „Pizzabrötchen“ (auch „Pizza Brötchen“, „Pizzasemmel“) findet jetzt die Pizzabaguettes aus dem BLS (mit Tomaten und Käse, mit Kochschinken, mit Gemüse und Schafskäse).
+- Pizzabaguette bot „1 Pizza“ (350 g) als Portion an. Jetzt: „1 Pizzabrötchen (Hälfte)“ mit 75 g und „½ Pizzabaguette“ mit 125 g.
+
 ## [0.22.0] – 2026-11-20
 
 ### Neu

@@ -130,6 +130,7 @@ SYNONYMS = {
     "haferflocken": ["hafer flocken"], "spatzle": ["eierteigwaren gekocht", "eier-frischteigwaren spatzle"],
     "nudelsalat": ["salat aus eierteigwaren"], "sushi": ["sushi mit lachs", "sushi vegan"],
     "burger": ["hamburger", "cheeseburger"],
+    "pizzabrotchen": ["pizzabaguette"], "pizza brotchen": ["pizzabaguette"], "pizzasemmel": ["pizzabaguette"],
     "apfelschorle": ["fruchtsaftschorle apfel"], "wasser": ["mineralwasser", "trinkwasser"],
     "kase": ["schnittkase", "gouda", "emmentaler", "hartkase"],
     "bier": ["pils", "export hell", "weizenbier"], "weizen": ["hefeweizen weizenbier"],
@@ -327,6 +328,7 @@ PORTION_RULES = [
     (r"eis\b|eiscreme|speiseeis", ("S2", "Y9"), [("1 Kugel", 60)]),
     (r"suppe|eintopf|brühe", ("X4",), [("1 Teller", 300)]),
     (r"salat", ("X1", "X2", "G1"), [("1 Schale", 150)]),
+    (r"pizzabaguette", None, [("1 Pizzabrötchen (Hälfte)", 75), ("½ Pizzabaguette", 125)]),   # vor „pizza“
     (r"pizza", None, [("1 Pizza", 350), ("1 Stück (⅛)", 45)]),
     (r"ketchup|senf|mayonnaise|dressing|soße|sauce", None, [("1 EL", 15), ("1 TL", 5)]),
 ]
