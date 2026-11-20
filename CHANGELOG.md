@@ -6,6 +6,8 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+## [0.18.0] – 2026-11-20
+
 ### Neu
 - Barcode-Scanner auf dem iPhone (Safari, auch als installierte App) und in Firefox: Ohne eingebaute Erkennung lädt FitPath beim ersten Scannen die Erkennung ZXing als WebAssembly vom eigenen Server (rund 1 MB, danach im Cache). Android nutzt weiter die eingebaute.
 - **📸 Foto vom Barcode**: öffnet die Kamera-App, der Barcode wird aus dem Foto gelesen. Hilft, wenn der Live-Scan nicht scharf stellt oder die Kamera im Browser nicht erlaubt ist.
