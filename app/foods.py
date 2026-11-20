@@ -15,6 +15,7 @@ import os
 import re
 import threading
 import time
+import unicodedata
 
 import httpx2
 
@@ -152,7 +153,26 @@ _cache = {"sig": None, "rows": []}
 
 
 def _norm(s: str) -> str:
-    return (s or "").lower().translate(_UML)
+    # NFC: iPhone-Tastaturen schicken „ö“ manchmal als „o“ + Trema-Zeichen
+    return unicodedata.normalize("NFC", s or "").lower().translate(_UML)
+
+
+def _synonyms(qn: str) -> list:
+    """Synonyme zur Eingabe: auch mit Bindestrich oder ohne Leerzeichen („Pizza-Brötchen“), mit ae/oe/ue
+    („Pizzabroetchen“) und schon beim Tippen (ab 6 Zeichen, „Pizzabröt“ → „pizzabrotchen“)."""
+    forms = []
+    for q in dict.fromkeys((qn, re.sub(r"([aou])e", r"\1", qn))):   # ohne Doppelte, Reihenfolge bleibt
+        q = re.sub(r"[-\s]+", " ", q).strip()
+        forms += [q, q.replace(" ", "")]
+    for k in forms:
+        if k in SYNONYMS:
+            return SYNONYMS[k]
+    out = []
+    for k in {f for f in forms if " " not in f and len(f) >= 6}:
+        for key, syns in SYNONYMS.items():
+            if key.replace(" ", "").startswith(k):
+                out += [x for x in syns if x not in out]
+    return out[:6]
 
 
 def _index(conn) -> list:
@@ -203,8 +223,11 @@ def search(conn, q: str, limit: int = 40) -> list:
     if not tokens:
         return []
     variants = [(tokens, 0)]
-    if qn in SYNONYMS:
-        variants += [(syn.split(), SYNONYM_BONUS) for syn in SYNONYMS[qn]]
+    if re.search(r"[aou]e", qn):          # „broetchen“ wie „brötchen“
+        alt = [re.sub(r"([aou])e", r"\1", t) for t in tokens]
+        if alt != tokens:
+            variants.append((alt, 0))
+    variants += [(syn.split(), SYNONYM_BONUS) for syn in _synonyms(qn)]
     uses = dict(conn.execute("SELECT food_id, COUNT(*) FROM food_log WHERE food_id IS NOT NULL GROUP BY food_id")
                 .fetchall())
     scored = []

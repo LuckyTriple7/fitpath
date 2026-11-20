@@ -31,10 +31,19 @@ def test_grapes_have_portions_not_wine():
 
 
 def test_pizzabroetchen():
-    for q in ("pizzabrötchen", "Pizza Brötchen"):
+    import unicodedata
+    # iPhone schickt „ö“ manchmal als o + Trema (NFD); beim Tippen; Bindestrich; oe statt ö
+    for q in ("pizzabrötchen", "Pizza Brötchen", unicodedata.normalize("NFD", "Pizzabrötchen"), "Pizzabrötch",
+              "Pizzabröt", "Pizza-Brötchen", "Pizzabroetchen"):
         p = top(q)
         assert p["name"].startswith("Pizzabaguette"), (q, p["name"])
     assert top("pizzabrötchen")["portions"][0]["name"] == "1 Pizzabrötchen (Hälfte)"   # nicht „1 Pizza“ (350 g)
     with db.connect() as conn:
         salami = next(f for f in foods.search(conn, "pizza salami", 10) if f["source"] == "bls")
     assert salami["portions"][0]["name"] == "1 Pizza"                                   # echte Pizza unverändert
+
+
+def test_search_robust_but_unchanged():
+    assert top("Kaese")["name"] == top("Käse")["name"]
+    assert top("Brötch")["name"] == top("Brötchen")["name"]
+    assert top("pizza")["name"].startswith("Pizza")
