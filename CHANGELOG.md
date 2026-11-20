@@ -6,6 +6,8 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+## [0.18.1] – 2026-11-20
+
 ### Neu
 - Im Ring auf Heute steht unter „übrig“ jetzt auch, wie viel heute schon verbraucht ist (Punkte oder kcal).
 
