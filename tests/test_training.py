@@ -109,3 +109,18 @@ def test_api_manual_workout():
     st = c.delete("/api/workouts/m1", headers=H).json()
     assert not any(x["id"] == "m1" for x in (st["overview"]["activity"] or {}).get("workouts", []))
     c.__exit__(None, None, None)
+
+
+def test_stats_training_summary():
+    c = client()
+    day = c.get("/api/state").json()["today"]
+    with db.connect() as conn:
+        conn.execute("DELETE FROM workouts")
+    for wid, kind, minutes in (("s1", "schwimmen", 45), ("s2", "schwimmen", 30), ("k1", "kraft", 15)):
+        c.post("/api/workouts", headers=H, json={"id": wid, "kind": kind, "minutes": minutes, "day": day})
+    t = c.get("/api/stats?days=7").json()["training"]
+    assert t["days"] == 1 and t["minutes"] == 90 and t["points"] > 0
+    assert [x["kind"] for x in t["sports"]] == ["schwimmen", "kraft"] and t["sports"][0]["count"] == 2
+    last = c.get("/api/stats?days=7").json()["days"][-1]
+    assert last["train_minutes"] == 90 and last["train_points"] == t["points"]
+    c.__exit__(None, None, None)

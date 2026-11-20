@@ -121,6 +121,7 @@ def history(conn, s: dict, days: int) -> dict:
             "fiber": round(t.get("fiber", 0), 1), "sugar": round(t.get("sugar", 0)),
             "steps": a.get("steps"), "act_points": a.get("act_points", 0), "act_kcal": a.get("act_kcal", 0),
             "train_kcal": a.get("train_kcal", 0), "train_minutes": a.get("train_minutes", 0),
+            "train_points": points.round_points(a.get("train_kcal", 0) / points.KCAL_PER_POINT),
         })
         d += timedelta(days=1)
     logged = [x for x in series if x["entries"] and x["day"] != today.isoformat()]
@@ -149,7 +150,34 @@ def history(conn, s: dict, days: int) -> dict:
         "ampel": {"green": round(green / all_kcal, 3), "yellow": round(yellow / all_kcal, 3), "red": round(red / all_kcal, 3)},
         "weights": [w for w in weights if w["day"] >= first],
         "top": top_foods(conn, first),
+        "training": training_summary(act),
     }
+
+
+def training_summary(act: dict) -> dict:
+    """Training im Zeitraum: Trainingstage, Minuten, Gutschrift (mit Tagesgrenze) und je Sportart.
+    Doppelte Einheiten (zwei Apps) zählen nicht."""
+    sports, minutes, kcal, days = {}, 0.0, 0.0, 0
+    for a in act.values():
+        kcal += a.get("train_kcal") or 0
+        if (a.get("train_minutes") or 0) >= training.TRAIN_DAY_MINUTES:
+            days += 1
+        for w in a.get("workouts") or []:
+            if w["duplicate"]:
+                continue
+            x = sports.setdefault(w["kind"], {"kind": w["kind"], "name": w["name"], "icon": w["icon"],
+                                              "count": 0, "minutes": 0.0, "kcal": 0, "points": 0})
+            x["count"] += 1
+            x["minutes"] += w["minutes"]
+            x["kcal"] += w["kcal"]
+            x["points"] += w["points"]
+            if w["kind"] != "gehen":
+                minutes += w["minutes"]
+    for x in sports.values():
+        x["minutes"] = round(x["minutes"])
+    return {"days": days, "minutes": round(minutes), "kcal": round(kcal),
+            "points": points.round_points(kcal / points.KCAL_PER_POINT),
+            "sports": sorted(sports.values(), key=lambda x: (-x["minutes"], x["name"]))}
 
 
 def top_foods(conn, first: str, limit: int = 8) -> list:

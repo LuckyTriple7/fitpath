@@ -94,6 +94,7 @@ def catalog() -> dict:
         "credit": points.ACTIVITY_CREDIT,
         "kcal_per_point": points.KCAL_PER_POINT,
         "max_points_day": MAX_POINTS_DAY,
+        "train_day_minutes": TRAIN_DAY_MINUTES,
     }
 
 

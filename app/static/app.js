@@ -1651,8 +1651,34 @@ async function viewStats() {
     ${cravingHtml(d.cravings)}
     <div class="card"><div class="card-head"><h2>🏆 Größte Punkte-Lieferanten</h2></div>
       ${d.top.length ? `<ul class="list">${d.top.map(x => `<li><div class="bd"><b>${esc(x.name)}</b><div class="meta">${x.count}× · ${num.format(x.kcal)} kcal</div></div><span class="val">${P ? x.points + " P" : num.format(x.kcal) + " kcal"}</span></li>`).join("")}</ul>` : `<div class="empty">Noch keine Einträge.</div>`}</div>
-    <div class="card"><div class="card-head"><h2>👟 Schritte</h2><small>Ziel ${num.format(S.settings.steps_goal)}</small></div>${chartSteps(d.days, S.settings.steps_goal)}</div>`;
+    <div class="card"><div class="card-head"><h2>👟 Schritte</h2><small>Ziel ${num.format(S.settings.steps_goal)}</small></div>${chartSteps(d.days, S.settings.steps_goal)}</div>
+    ${trainingStatsHtml(d.training, d.days, P)}`;
   bindAdaptive(d.adaptive);
+}
+
+function trainingStatsHtml(t, days, P) {
+  const head = `<div class="card-head"><h2>💪 Training</h2><small>im Zeitraum</small></div>`;
+  if (!t || !t.sports.length) return `<div class="card">${head}<div class="empty">Noch kein Training im Zeitraum. Auf Heute in der Karte „Schritte“ über ＋ Training eintragen, Einheiten von der Uhr kommen über Health Connect.</div></div>`;
+  const min = S.training ? S.training.train_day_minutes : 20;
+  return `<div class="card">${head}
+    <div class="tiles three"><div class="tile"><div class="v">${t.days}</div><div class="l">Trainingstage</div></div>
+      <div class="tile"><div class="v">${t.minutes >= 60 ? `${num1.format(t.minutes / 60)} h` : `${t.minutes} min`}</div><div class="l">Training</div></div>
+      <div class="tile"><div class="v">+${P ? num.format(t.points) : num.format(t.kcal)}</div><div class="l">${P ? "Punkte" : "kcal"} gutgeschrieben</div></div></div>
+    ${chartTraining(days, min)}
+    <ul class="list">${t.sports.map(x => `<li><span style="font-size:1.4rem">${x.icon}</span><div class="bd"><b>${esc(x.name)}</b>
+      <div class="meta">${x.count}× · ${fmtMin(x.minutes)}</div></div>
+      <span class="val">${!x.kcal && x.kind === "gehen" ? `<span class="muted">über Schritte</span>` : `+${fmtVal(x.points, x.kcal)}`}</span></li>`).join("")}</ul>
+    <p class="note">Trainingstag ab ${min} Minuten, Spazieren zählt über die Schritte. Je Tag höchstens ${S.training ? S.training.max_points_day : 15} Trainingspunkte, deshalb kann die Summe oben kleiner sein als die Liste.</p></div>`;
+}
+
+function chartTraining(days, min) {
+  const W = 340, H = 110, P = 30, n = days.length;
+  const max = Math.max(60, ...days.map(x => x.train_minutes || 0));
+  const bw = (W - P) / n, Y = v => H - 16 - v / max * (H - 26);
+  const bars = days.map((x, i) => x.train_minutes ? `<rect x="${(P + i * bw + bw * .14).toFixed(1)}" y="${Y(x.train_minutes).toFixed(1)}" width="${Math.max(bw * .72, 1).toFixed(1)}" height="${(x.train_minutes / max * (H - 26)).toFixed(1)}" rx="2" fill="${x.train_minutes >= min ? "var(--good)" : "var(--accent)"}"><title>${x.day}: ${x.train_minutes} min</title></rect>` : "").join("");
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Trainingsminuten pro Tag">
+    <line x1="${P}" x2="${W}" y1="${Y(min).toFixed(1)}" y2="${Y(min).toFixed(1)}" stroke="var(--muted)" stroke-dasharray="4 3"/>
+    <text x="0" y="${(Y(min) + 3).toFixed(1)}">${min}′</text>${bars}</svg>`;
 }
 
 /* Adaptiver Bedarf: echter Verbrauch aus Einträgen und Gewicht (app/adaptive.py) */
@@ -1738,6 +1764,7 @@ async function viewMore() {
         <p class="note"><b>Tagesbudget</b> = (kcal-Ziel − 200 kcal für 0-Punkte-Lebensmittel) ÷ 40. Wer satt machend isst, kommt damit auf sein kcal-Ziel, bei viel Zucker und Fett wird es knapper – genau so ist es gedacht. kcal-Ziel nach Mifflin-St Jeor, nie unter ${num.format(b.floor)} kcal, Abnahme höchstens 1 % des Gewichts pro Woche.</p>
         <p class="note"><b>Wochenreserve</b>: Von jedem erfassten Tag wandern bis zu 4 ungenutzte Punkte in die Reserve, ein überzogener Tag zieht ab. Montag beginnt sie neu.</p>
         <p class="note"><b>Aktivität</b>: Schritte über ${num.format(s.steps_baseline)} geben Punkte. Geschätzt ≈ 0,0005 kcal je Schritt und kg, davon nur die Hälfte – Schätzungen sind meist zu hoch.</p>
+        <p class="note"><b>Training</b>: (Belastung in MET − 1) × kg × Stunden, also nur der Verbrauch über Ruhe, davon die Hälfte, höchstens ${S.training ? S.training.max_points_day : 15} Punkte am Tag. Schritte, die beim Gehen, Laufen oder Wandern schon gezählt haben, werden abgezogen.</p>
       </details></div>
     <div class="card"><h2>👟 Schritte</h2>
       <div class="grid2"><label class="f"><span>Grundlinie</span><input type="number" id="s-base" value="${s.steps_baseline}" step="500"></label>
