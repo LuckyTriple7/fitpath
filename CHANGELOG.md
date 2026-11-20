@@ -6,6 +6,8 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+## [0.19.0] – 2026-11-20
+
 ### Neu
 - Statistik zeigt das Training: Trainingstage, Trainingszeit, gutgeschriebene Punkte (oder kcal), Minuten pro Tag als Balken (grün ab 20 Minuten) und eine Liste je Sportart.
 - „So rechnet FitPath“ (Mehr → Anzeige) erklärt die Trainingspunkte.
