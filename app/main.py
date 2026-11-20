@@ -40,7 +40,8 @@ async def lifespan(app):
 app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 
 CSP = ("default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; "
-       "script-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self'; media-src 'self' blob:; "
+       # wasm-unsafe-eval: nur WebAssembly übersetzen (Barcode-Erkennung), kein eval() für JavaScript
+       "script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; manifest-src 'self'; worker-src 'self'; media-src 'self' blob:; "
        "frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
 
 
@@ -87,6 +88,18 @@ def sw():
 @app.get("/manifest.webmanifest")
 def manifest():
     return _static("manifest.webmanifest", "application/manifest+json")
+
+
+# Barcode-Erkennung für Safari/iPhone (siehe static/vendor/LICENSE.txt). Feste Liste, Version im Namen,
+# deshalb darf der Browser die Dateien ein Jahr behalten.
+VENDOR = {"barcode-detector-3.2.3.js": "text/javascript", "zxing_reader-3.1.6.wasm": "application/wasm"}
+
+
+@app.get("/vendor/{name}")
+def vendor(name: str):
+    if name not in VENDOR:
+        raise HTTPException(404)
+    return _static(f"vendor/{name}", VENDOR[name], "public, max-age=31536000, immutable")
 
 
 @app.get("/icons/{name}")

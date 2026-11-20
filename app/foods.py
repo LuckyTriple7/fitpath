@@ -282,6 +282,7 @@ PORTION_RULES = [
     (r"^(orange|apfelsine) roh", None, [("1 Orange (ohne Schale)", 150)]),
     (r"^mandarine roh", None, [("1 Mandarine", 60)]),
     (r"^kiwi", None, [("1 Kiwi", 70)]),
+    (r"^weintraube", None, [("1 Handvoll", 80), ("1 Schale (150 g)", 150)]),
     (r"^(pfirsich|nektarine) roh", None, [("1 Stück", 130)]),
     (r"^tomate roh", None, [("1 Tomate (mittel)", 90)]),
     (r"^(gurke|salatgurke) roh", None, [("¼ Gurke", 100)]),

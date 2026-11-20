@@ -23,3 +23,8 @@ def test_everyday_terms():
     assert top("hamburger")["name"] == "Hamburger"
     assert top("eis")["name"] == "Vanilleeis"
     assert top("roggenvollkornbrot")["name"].startswith("Roggenvollkornbrot")
+
+
+def test_grapes_have_portions_not_wine():
+    p = top("weintraube")
+    assert p["name"].startswith("Weintraube") and p["portions"][0]["name"] == "1 Handvoll"

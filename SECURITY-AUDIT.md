@@ -145,7 +145,7 @@ KI-Fehler werden inklusive Antworttext geloggt; der Service Worker cached `/` un
 
 - 256-Bit-Tokens, in der Datenbank nur SHA-256-Hashes; `secrets` statt `random`; Kopplungscode mit `secrets.randbelow`.
 - CSRF-Schutz über Pflicht-Header (`x-fitpath`) bei allen schreibenden Methoden – ohne CORS-Middleware wirksam; GET-Routen sind (bis auf `last_seen` und den Barcode-Abruf) lesend.
-- CSP ohne `unsafe-inline` für Skripte, `frame-ancestors 'none'`, `nosniff`, `no-referrer`, `Permissions-Policy` nur Kamera.
+- CSP ohne `unsafe-inline` und ohne `unsafe-eval` für Skripte (seit 0.18.0 nur `'wasm-unsafe-eval'` für die Barcode-Erkennung per WebAssembly), `frame-ancestors 'none'`, `nosniff`, `no-referrer`, `Permissions-Policy` nur Kamera.
 - SQL durchgängig parametrisiert (auch die `IN (...)`-Liste); kein `eval`/`exec`/`pickle`.
 - Frontend: `esc()` konsequent; die wenigen unescaped Interpolationen sind Zahlen, Konstanten oder serverseitig erzeugtes SVG mit Env-Daten.
 - Webhook: HMAC über den Rohbody mit `compare_digest`, alternativ Bearer; das Secret wird nie über `public_settings` ausgeliefert.

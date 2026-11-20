@@ -186,3 +186,19 @@ def test_no_info_leak_without_login(monkeypatch):
         asyncio.run(ai._complete("s", "Ich aß 3 Kekse"))
     assert str(exc.value) == "LiteLLM 400 (invalid_request_error)"
     c.__exit__(None, None, None)
+
+
+def test_vendor_files_for_barcode_scanner():
+    c = client()
+    js = c.get("/vendor/barcode-detector-3.2.3.js")
+    assert js.status_code == 200 and js.headers["content-type"].startswith("text/javascript")
+    assert "immutable" in js.headers["cache-control"] and "BarcodeDetectionAPI" in js.text
+    wasm = c.get("/vendor/zxing_reader-3.1.6.wasm")
+    assert wasm.headers["content-type"] == "application/wasm" and wasm.content[:4] == b"\0asm"
+    # nur die feste Liste, kein Pfad nach außen
+    for bad in ("LICENSE.txt", "..%2Fapp.js", "x.js"):
+        assert c.get(f"/vendor/{bad}").status_code == 404
+    # WebAssembly erlaubt, JavaScript-eval weiterhin nicht
+    csp = js.headers["content-security-policy"]
+    assert "script-src 'self' 'wasm-unsafe-eval';" in csp and "'unsafe-eval'" not in csp
+    c.__exit__(None, None, None)

@@ -1413,18 +1413,54 @@ function openCustom(food, meal, hint = "") {
 
 /* ---------- Barcode ---------- */
 
+// Barcode-Erkennung: eingebaut (Chrome auf Android) oder ZXing als WebAssembly vom eigenen Server
+// (Safari/iPhone, Firefox). Die rund 1 MB werden erst beim ersten Scannen geladen.
+const EAN = ["ean_13", "ean_8", "upc_a", "upc_e"];
+let detectorP = null;
+function loadScript(src) {
+  return new Promise((ok, fail) => {
+    const el = document.createElement("script");
+    el.src = src; el.onload = ok; el.onerror = () => fail(new Error("Scanner nicht geladen"));
+    document.head.appendChild(el);
+  });
+}
+function barcodeDetector() {
+  detectorP = detectorP || (async () => {
+    if ("BarcodeDetector" in window) {
+      try {
+        const sup = await BarcodeDetector.getSupportedFormats();
+        const formats = EAN.filter(f => sup.includes(f));
+        if (formats.length) return new BarcodeDetector({ formats });
+      } catch (_) { /* dann ZXing */ }
+    }
+    if (!window.BarcodeDetectionAPI) await loadScript("/vendor/barcode-detector-3.2.3.js");
+    const lib = window.BarcodeDetectionAPI;
+    lib.prepareZXingModule({
+      overrides: { locateFile: (path, prefix) => path.endsWith(".wasm") ? "/vendor/zxing_reader-3.1.6.wasm" : prefix + path },
+      fireImmediately: true,
+    });
+    return new lib.BarcodeDetector({ formats: EAN });
+  })();
+  detectorP.catch(() => { detectorP = null; });
+  return detectorP;
+}
+const eanOf = codes => (codes.find(x => /^\d{8,14}$/.test(x.rawValue)) || {}).rawValue;
+
 function openScan(meal) {
-  const native = "BarcodeDetector" in window && navigator.mediaDevices && navigator.mediaDevices.getUserMedia;
+  const live = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
   openSheet(`<h2>📷 Barcode scannen</h2>
-    ${native ? `<div class="scan"><video id="cam" playsinline muted></video><div class="frame"></div></div><p class="note center" id="scan-hint">Barcode in den Rahmen halten …</p>`
-      : `<p class="note">Dieser Browser kann keine Barcodes erkennen. Zahl unter dem Strichcode eintippen:</p>`}
-    <div class="row nowrap"><input type="text" inputmode="numeric" id="code" class="grow" placeholder="z. B. 4001234567890"><button class="btn primary" id="go">Suchen</button></div>`, async root => {
-    let stream = null, timer = null, done = false;
+    ${live ? `<div class="scan" id="scan-box"><video id="cam" playsinline muted></video><div class="frame"></div></div>` : ""}
+    <p class="note center" id="scan-hint">${live ? "Kamera startet …" : "Foto vom Barcode machen oder die Zahl darunter eintippen."}</p>
+    <button class="btn block" id="snap">📸 Foto vom Barcode</button>
+    <input type="file" accept="image/*" capture="environment" id="snap-file" hidden>
+    <div class="row nowrap mt"><input type="text" inputmode="numeric" id="code" class="grow" placeholder="Zahl unter dem Strichcode"><button class="btn primary" id="go">Suchen</button></div>`, async root => {
+    let stream = null, timer = null, done = false, busy = false;
+    const hint = t => { const h = $("#scan-hint", root); if (h) h.textContent = t; };
     const stop = () => { clearInterval(timer); if (stream) stream.getTracks().forEach(t => t.stop()); stream = null; };
     sheetCleanup = stop;
     const lookup = async code => {
       if (done) return; done = true; stop(); vibrate(60);
-      $("#scan-hint", root) && ($("#scan-hint", root).textContent = `Suche ${code} …`);
+      hint(`Suche ${code} …`);
       let r;
       try { r = await api(`/api/foods/barcode/${encodeURIComponent(code)}`); } catch (err) { done = false; return toast(err.message); }
       if (r.status === "found") { lists = null; return openAmount(r.food, meal); }
@@ -1433,19 +1469,48 @@ function openScan(meal) {
       toast(r.status === "busy" ? "Zu viele Abfragen – kurz warten" : r.status === "invalid" ? "Barcode ungültig" : "Open Food Facts nicht erreichbar");
     };
     $("#go", root).onclick = () => { const c = $("#code", root).value.replace(/\D/g, ""); if (c.length >= 6) lookup(c); else toast("Barcode zu kurz"); };
-    if (!native) return;
+
+    // Foto: die Kamera-App stellt scharf und liefert volle Auflösung, braucht keine Kamera-Erlaubnis im Browser
+    $("#snap", root).onclick = () => { stop(); $("#scan-box", root) && ($("#scan-box", root).hidden = true); $("#snap-file", root).click(); };
+    $("#snap-file", root).onchange = async ev => {
+      const file = ev.target.files && ev.target.files[0]; ev.target.value = "";
+      if (!file) return;
+      hint("Lese Barcode aus dem Foto …");
+      try {
+        const det = await barcodeDetector();
+        let code = eanOf(await det.detect(file));
+        if (!code) {   // sehr große Fotos: verkleinert noch einmal versuchen
+          const bmp = await createImageBitmap(file), k = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+          const cv = document.createElement("canvas"); cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
+          cv.getContext("2d").drawImage(bmp, 0, 0, cv.width, cv.height);
+          code = eanOf(await det.detect(cv));
+        }
+        if (code) return lookup(code);
+        hint("Kein Barcode erkannt. Näher ran, gerade halten, oder die Zahl eintippen.");
+      } catch (err) { hint("Foto nicht lesbar – Zahl unten eintippen."); }
+    };
+
+    if (!live) return;
     try {
-      const formats = (await BarcodeDetector.getSupportedFormats()).filter(f => ["ean_13", "ean_8", "upc_a", "upc_e"].includes(f));
-      const det = new BarcodeDetector({ formats: formats.length ? formats : undefined });
+      const detP = barcodeDetector();   // lädt parallel zum Kamerastart
       stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1280 } }, audio: false });
       if ($("#sheet").hidden) return stop();
       const v = $("#cam", root); v.srcObject = stream; await v.play();
+      hint("Scanner wird geladen …");
+      const det = await detP;
+      if (!stream) return;
+      hint("Barcode in den Rahmen halten …");
       timer = setInterval(async () => {
-        if (done || v.readyState < 2) return;
-        try { const codes = await det.detect(v); const c = codes.find(x => /^\d{8,14}$/.test(x.rawValue)); if (c) lookup(c.rawValue); } catch (_) { /* nächster Versuch */ }
+        if (done || busy || v.readyState < 2) return;
+        busy = true;
+        try { const c = eanOf(await det.detect(v)); if (c) lookup(c); } catch (_) { /* nächster Versuch */ }
+        busy = false;
       }, 250);
     } catch (err) {
-      $("#scan-hint", root) && ($("#scan-hint", root).textContent = "Kamera nicht verfügbar – Zahl unten eintippen.");
+      stop();
+      $("#scan-box", root) && ($("#scan-box", root).hidden = true);
+      hint(err && err.name === "NotAllowedError" ? "Kamera nicht erlaubt – Foto vom Barcode machen oder Zahl eintippen."
+        : "Live-Scan geht hier nicht – Foto vom Barcode machen oder Zahl eintippen.");
     }
   });
 }

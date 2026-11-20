@@ -1,3 +1,5 @@
+[hidden] { display: none !important; }   /* sonst gewinnt z. B. .stepper { display: flex } */
+
 :root {
   --bg: #0f1115;
   --bg-2: #151821;

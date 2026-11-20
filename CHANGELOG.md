@@ -6,6 +6,17 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+### Neu
+- Barcode-Scanner auf dem iPhone (Safari, auch als installierte App) und in Firefox: Ohne eingebaute Erkennung lädt FitPath beim ersten Scannen die Erkennung ZXing als WebAssembly vom eigenen Server (rund 1 MB, danach im Cache). Android nutzt weiter die eingebaute.
+- **📸 Foto vom Barcode**: öffnet die Kamera-App, der Barcode wird aus dem Foto gelesen. Hilft, wenn der Live-Scan nicht scharf stellt oder die Kamera im Browser nicht erlaubt ist.
+
+### Behoben
+- Bei Lebensmitteln ohne Portionen (z. B. Weintraube) stand ein Zähler mit „1“ da, Plus und Minus taten nichts. Ausgeblendete Elemente bleiben jetzt wirklich unsichtbar.
+- Weintrauben haben Portionen: 1 Handvoll (80 g) und 1 Schale (150 g).
+
+### Sicherheit
+- Die CSP erlaubt zusätzlich `'wasm-unsafe-eval'` (nur WebAssembly übersetzen, kein `eval()` für JavaScript).
+
 ## [0.17.0] – 2026-11-20
 
 ### Neu

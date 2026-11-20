@@ -68,7 +68,7 @@ git push --follow-tags            # GitHub testet, prüft Tag = Version, baut da
 | Bereich | Inhalt |
 |---|---|
 | Heute | Ring mit übrigen Punkten (oder kcal), Budget, Aktivitätspunkte, Wochenreserve, Wochenleiste Mo–So, Mahlzeiten (Frühstück, Mittag, Abend, Snacks), „Nochmal“-Leiste (ein Tipp erfasst die zuletzt gegessene Menge), Wochen-Challenge, Level, Schritte und Training, Trendgewicht, Tage vor und zurück. Oben neben dem Logo steht die Version |
-| Erfassen | Suche in rund 7.140 BLS-Lebensmitteln plus eigenen, Listen „Zuletzt“, „Favoriten“, „Eigene“, „Auswärts“, Barcode per Kamera (`BarcodeDetector` in Chrome für Android, sonst Zahl eintippen), unbekannte Produkte per Foto der Nährwerttabelle (KI füllt das Formular vor), Portionen (Scheibe, Stück, Glas …) mit Anzahl, Live-Vorschau mit Erklärung der Punkte, eigene Portionen merken, 0-Punkte-Schalter je Lebensmittel |
+| Erfassen | Suche in rund 7.140 BLS-Lebensmitteln plus eigenen, Listen „Zuletzt“, „Favoriten“, „Eigene“, „Auswärts“, Barcode per Kamera live oder per Foto (eingebautes `BarcodeDetector` in Chrome für Android, sonst ZXing als WebAssembly vom eigenen Server, z. B. Safari auf dem iPhone; immer auch Zahl eintippen), unbekannte Produkte per Foto der Nährwerttabelle (KI füllt das Formular vor), Portionen (Scheibe, Stück, Glas …) mit Anzahl, Live-Vorschau mit Erklärung der Punkte, eigene Portionen merken, 0-Punkte-Schalter je Lebensmittel |
 | Eigene Lebensmittel | Nährwerte je 100 g von der Packung, optional mit Barcode; unbekannte Barcodes landen direkt im Formular |
 | Wie gestern | Leere Mahlzeit zeigt „Gestern: …“ und neben dem + einen Knopf **↺**. Er öffnet ein Fenster mit den Einträgen dieser Mahlzeit vom Vortag; mit ✕ rausnehmen, was nicht nochmal soll, der Rest wird übernommen (mit „Rückgängig“). Der Vortag bleibt unverändert |
 | Training | Karte „Schritte“ auf Heute: **＋ Training** mit 15 Sportarten (Schwimmen, Rad, Laufen, Kraft, Yoga …), Dauer und Intensität (leicht, mittel, hart), Vorschau der Punkte. Einheiten von der Uhr kommen über Health Connect, Sportart und Intensität lassen sich ändern, Löschen blendet sie aus. Rechnung siehe [Punktesystem](#punktesystem) |
@@ -187,6 +187,7 @@ Uhrzeiten und Zahlen gibt die App unabhängig von der Browsersprache ein: Uhrzei
 | `app/main.py` | FastAPI: Routen, Validierung, Sicherheits-Header (CSP, Kamera nur für die eigene Seite) |
 | `app/db.py` | SQLite-Schema, Einstellungen, Zeitfunktionen |
 | `app/points.py` | Punkte-Formel, 0-Punkte-Regeln, kcal-Ziel, Budget, Aktivität, Wochenreserve |
+| `app/static/vendor/` | Barcode-Erkennung für Browser ohne `BarcodeDetector`: `barcode-detector` 3.2.3 (IIFE-Ponyfill) und `zxing-wasm` 3.1.6, beide MIT, Herkunft und Prüfsummen in `LICENSE.txt`. Ausgeliefert nur über die feste Liste `VENDOR` in `app/main.py` |
 | `app/training.py` | Sportarten mit MET, Zuordnung der Health-Connect-Typen, Trainingspunkte, doppelte Einheiten |
 | `app/foods.py` | BLS-Import, Suche, Portionen, eigene Lebensmittel, Open-Food-Facts-Barcodes |
 | `app/diary.py` | Tagessummen, Übersicht „Heute“, Verlauf für die Statistik |
