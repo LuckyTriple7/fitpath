@@ -6,6 +6,8 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+## [0.17.0] – 2026-11-20
+
 ### Neu
 - Training bringt Aktivitätspunkte. In der Karte „Schritte“ gibt es **＋ Training**: Sportart (15 zur Wahl, darunter Schwimmen, Radfahren, Laufen, Krafttraining, Yoga, Aquafitness), Dauer und Intensität, mit Vorschau der Punkte. Gezählt wird nur der Verbrauch über Ruhe, davon die Hälfte, höchstens 15 Punkte am Tag.
 - Einheiten von der Uhr kommen automatisch über Health Connect. Dafür in Life Dashboard den Zugriff auf „Exercise“ erlauben. Sportart und Intensität lassen sich in FitPath ändern, Löschen blendet eine Einheit dauerhaft aus.
