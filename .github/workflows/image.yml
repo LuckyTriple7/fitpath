@@ -18,6 +18,9 @@ permissions:
 
 jobs:
   test:
+    # tools/release.py pusht main und den Tag zusammen. Der Tag-Lauf testet und baut denselben Commit,
+    # der main-Lauf für den Release-Commit wäre doppelt: überspringen (image hängt an test und entfällt mit).
+    if: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'chore(release):')) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
