@@ -6,6 +6,8 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+## [0.20.0] – 2026-11-20
+
 ### Neu
 - **Einkaufsmodus** (im Scan-Fenster oder über `#einkauf`): Die Kamera bleibt an, jedes gescannte Produkt landet mit Punkten je 100 g, je Portion und je Packung in einer Liste. Antippen öffnet das Erfassen, „Zurück zum Einkauf“ führt mit der Liste zurück. Der Bildschirm bleibt dabei an, wo der Browser es unterstützt.
 - Mehr als 10 neue Produkte pro Minute: Hinweis „Bitte kurz warten“ mit Countdown, die Produkte werden danach automatisch nachgeladen (Limit von Open Food Facts). Schon bekannte Produkte gehen sofort.
