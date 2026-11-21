@@ -6,6 +6,8 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+## [0.24.0] – 2026-11-21
+
 ### Neu
 - **Eigene Sachen verwalten**: Mehr → Eigene Sachen → Verwalten zeigt alle eigenen Gerichte, gemerkten Mahlzeiten und eigenen Lebensmittel. Antippen zum Bearbeiten, 🗑 zum Löschen, neu anlegen geht dort auch. Schon erfasste Einträge bleiben.
 - **Koppeln per QR-Code in der App**: Mehr → Geräte → QR scannen. Die Kamera-App des Handys öffnete den Link oft im Browser statt in FitPath, dort war man nicht angemeldet.
