@@ -6,6 +6,14 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+### Neu
+- **Eigene Sachen verwalten**: Mehr → Eigene Sachen → Verwalten zeigt alle eigenen Gerichte, gemerkten Mahlzeiten und eigenen Lebensmittel. Antippen zum Bearbeiten, 🗑 zum Löschen, neu anlegen geht dort auch. Schon erfasste Einträge bleiben.
+- **Koppeln per QR-Code in der App**: Mehr → Geräte → QR scannen. Die Kamera-App des Handys öffnete den Link oft im Browser statt in FitPath, dort war man nicht angemeldet.
+- Gemerkte Mahlzeiten lassen sich auch im Bearbeiten-Dialog löschen.
+
+### Behoben
+- Barcode-Scanner blieb nach längerer Zeit im Hintergrund stumm (Kamera an, aber keine Erkennung) bis zum Neustart der App. Die Erkennung wird jetzt nach dem Hintergrund und bei Hängern neu gestartet.
+
 ## [0.23.0] – 2026-11-20
 
 ### Neu

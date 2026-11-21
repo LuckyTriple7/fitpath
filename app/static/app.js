@@ -297,7 +297,7 @@ function viewLogin() {
       $("#pair-retry") && ($("#pair-retry").onclick = start); return; }
     if (!alive()) return;
     rid = r.rid; until = Date.now() + r.seconds * 1000;
-    $("#pair").innerHTML = `<p class="muted">Auf einem schon verbundenen Gerät den QR-Code mit der Kamera scannen<br>oder unter <b>Mehr → Geräte → Code eingeben</b> diese Zahl eintippen:</p>
+    $("#pair").innerHTML = `<p class="muted">Auf einem schon verbundenen Gerät unter <b>Mehr → Geräte → QR scannen</b> diesen Code scannen<br>oder über <b>Code eingeben</b> diese Zahl eintippen:</p>
       <div class="pair-qr">${r.qr_svg}</div>
       <div class="pair-code">${r.code.slice(0, 3)} ${r.code.slice(3)}</div>
       <p class="note" id="pair-left"></p>`;
@@ -342,6 +342,35 @@ async function openPairApprove(code) {
     };
     $("#pair-yes", root).onclick = () => decide(true);
     $("#pair-no", root).onclick = () => decide(false);
+  });
+}
+
+// QR-Code des neuen Geräts in der App scannen (die Kamera-App öffnet den Link oft im Browser statt in der PWA)
+const pairCodeOf = codes => {
+  for (const c of codes) {
+    const m = /[#&?]pair=(\d{6})/.exec(c.rawValue || "") || /^\s*(\d{3}) ?(\d{3})\s*$/.exec(c.rawValue || "");
+    if (m) return m.slice(1).join("");
+  }
+  return null;
+};
+function openPairScan() {
+  const live = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  if (!live) return openPairCode();
+  openSheet(`<h2>🔗 QR-Code scannen</h2>
+    <div class="scan" id="scan-box"><video id="cam" playsinline muted></video></div>
+    <p class="note center" id="scan-hint">Kamera startet …</p>
+    <button class="btn block" id="ps-code">Code stattdessen eintippen</button>`, root => {
+    const hint = t => { const h = $("#scan-hint", root); if (h) h.textContent = t; };
+    let done = false;
+    const cam = liveScan(root, code => {
+      if (done) return; done = true; cam.stop(); vibrate(60); openPairApprove(code);
+    }, st => {
+      if (st === "loading") hint("Scanner wird geladen …");
+      else if (st === "ready") hint("QR-Code vom neuen Gerät in die Kamera halten …");
+      else { $("#scan-box", root) && ($("#scan-box", root).hidden = true); hint(`${camError(st)} – Code eintippen.`); }
+    }, false, QR, pairCodeOf);
+    sheetCleanup = () => cam.stop();
+    $("#ps-code", root).onclick = () => { cam.stop(); openPairCode(); };
   });
 }
 
@@ -608,17 +637,13 @@ function openTemplate(t, meal) {
     $("#tp-items", root).onclick = e => { const b = e.target.closest("[data-rm]"); if (b) { skip.add(+b.dataset.rm); draw(); } };
     $("#tp-log", root).onclick = () => { closeSheet(); logTemplate(t, chipVal(root, "meal") || meal, [...skip]); };
     $("#tp-edit", root).onclick = () => openTemplateEdit(t);
-    $("#tp-del", root).onclick = async () => {
-      if (!confirm(`„${t.name}“ löschen? Schon erfasste Einträge bleiben.`)) return;
-      try { S = await api(`/api/templates/${encodeURIComponent(t.id)}`, { method: "DELETE" }); } catch (e) { return toast(e.message); }
-      lists = null; closeSheet(); viewToday(); toast("Mahlzeit gelöscht");
-    };
+    $("#tp-del", root).onclick = async () => { if (await deleteTemplate(t)) { closeSheet(); viewToday(); } };
     draw();
   });
 }
 
 // Neu (aus einer Mahlzeit auf Heute) oder bearbeiten: Name, Standard-Mahlzeit, Lebensmittel rausnehmen
-function openTemplateEdit(t) {
+function openTemplateEdit(t, done = null) {
   const items = t.items.map(x => ({ ...x }));
   const others = (S.templates || []).filter(x => x.id !== t.id).map(x => x.name.toLowerCase());
   openSheet(`<h2>${t.id ? "Mahlzeit bearbeiten" : "☆ Als Mahlzeit merken"}</h2>
@@ -628,7 +653,7 @@ function openTemplateEdit(t) {
     ${chipGroup("tmeal", [...MEALS.map(([k, l, i]) => [k, `${i} ${l}`]), ["", "nirgends"]], t.meal || "", false, "scroll")}
     <ul class="list" id="te-items"></ul>
     <p class="note">Ergänzen: Mahlzeit auf Heute erfassen, dort anpassen und mit ☆ unter demselben Namen neu merken.</p>
-    <button class="btn primary block" id="te-save">Speichern</button>`, root => {
+    <div class="row nowrap">${t.id ? `<button class="btn danger" id="te-del">Löschen</button>` : ""}<button class="btn primary grow" id="te-save">Speichern</button></div>`, root => {
     bindChips(root);
     const name = $("#te-name", root);
     const draw = () => {
@@ -643,11 +668,23 @@ function openTemplateEdit(t) {
         items: items.map(({ food_id, grams, portion }) => ({ food_id, grams, portion })) };
       try { S = await api(t.id ? `/api/templates/${encodeURIComponent(t.id)}` : "/api/templates", { method: t.id ? "PUT" : "POST", body }); }
       catch (e) { return toast(e.message); }
-      lists = null; closeSheet(); viewToday();
+      lists = null;
+      if (done) done(); else { closeSheet(); viewToday(); }
       toast(t.id ? "Gespeichert" : `„${body.name}“ gemerkt${body.meal ? ` – steht bei ${MEAL_LABEL[body.meal]} bereit` : ""}`);
     };
+    $("#te-del", root) && ($("#te-del", root).onclick = async () => {
+      if (!await deleteTemplate(t)) return;
+      if (done) done(); else { closeSheet(); viewToday(); }
+    });
     draw();
   });
+}
+
+async function deleteTemplate(t) {
+  if (!confirm(`„${t.name}“ löschen? Schon erfasste Einträge bleiben.`)) return false;
+  try { S = await api(`/api/templates/${encodeURIComponent(t.id)}`, { method: "DELETE" }); } catch (e) { toast(e.message); return false; }
+  lists = null; toast("Mahlzeit gelöscht");
+  return true;
 }
 
 function mealHtml(key, label, icon) {
@@ -1264,7 +1301,7 @@ async function openEntry(e) {
 
 /* ---------- Gericht aus Zutaten ---------- */
 
-function openRecipe(rec, meal) {
+function openRecipe(rec, meal, done = null) {
   const items = rec ? rec.recipe.items.map(i => ({ ...i })) : [];
   const cache = {};   // food_id -> Lebensmittel (für die Vorschau)
   let servings = rec ? rec.recipe.servings : 2, timer = null, seq = 0;
@@ -1345,13 +1382,14 @@ function openRecipe(rec, meal) {
       if (!items.length) return toast("Mindestens eine Zutat");
       try {
         const f = rec ? await api(`/api/recipes/${rec.id}`, { method: "PUT", body }) : await api("/api/recipes", { method: "POST", body });
-        lists = null; toast("Gericht gespeichert"); openAmount(f, meal);
+        lists = null; toast("Gericht gespeichert"); done ? done() : openAmount(f, meal);
       } catch (e) { toast(e.message); }
     };
     $("#r-del", root) && ($("#r-del", root).onclick = async () => {
       if (!confirm("Gericht löschen? Bereits erfasste Einträge bleiben.")) return;
-      const r = await api(`/api/foods/${rec.id}`, { method: "DELETE" });
-      lists = null; closeSheet(); toast(`Gericht ${r.result}`);
+      let r;
+      try { r = await api(`/api/foods/${rec.id}`, { method: "DELETE" }); } catch (e) { return toast(e.message); }
+      lists = null; done ? done() : closeSheet(); toast(`Gericht ${r.result}`);
     });
     draw();
   }, true);
@@ -1521,7 +1559,7 @@ async function photoDataUrl(file, max = 1600) {
   return cv.toDataURL("image/jpeg", 0.85);
 }
 
-function openCustom(food, meal, hint = "") {
+function openCustom(food, meal, hint = "", done = null) {
   const editing = food && food.id && (food.source === "custom" || food.source === "off");
   openSheet(`<h2>${editing ? "Lebensmittel bearbeiten" : "Eigenes Lebensmittel"}</h2>
     ${hint ? `<p class="note">${esc(hint)}</p>` : ""}
@@ -1570,13 +1608,14 @@ function openCustom(food, meal, hint = "") {
         const f = editing && food.source === "custom"
           ? await api(`/api/foods/${food.id}`, { method: "PUT", body })
           : await api("/api/foods", { method: "POST", body });
-        lists = null; toast("Gespeichert"); openAmount(f, meal);
+        lists = null; toast("Gespeichert"); done ? done() : openAmount(f, meal);
       } catch (err) { toast(err.message); }
     };
     $("#c-del", root) && ($("#c-del", root).onclick = async () => {
       if (!confirm("Lebensmittel löschen? Bereits erfasste Einträge bleiben.")) return;
-      const r = await api(`/api/foods/${food.id}`, { method: "DELETE" });
-      lists = null; closeSheet(); toast(`Lebensmittel ${r.result}`);
+      let r;
+      try { r = await api(`/api/foods/${food.id}`, { method: "DELETE" }); } catch (err) { return toast(err.message); }
+      lists = null; done ? done() : closeSheet(); toast(`Lebensmittel ${r.result}`);
     });
   });
 }
@@ -1586,7 +1625,8 @@ function openCustom(food, meal, hint = "") {
 // Barcode-Erkennung: eingebaut (Chrome auf Android) oder ZXing als WebAssembly vom eigenen Server
 // (Safari/iPhone, Firefox). Die rund 1 MB werden erst beim ersten Scannen geladen.
 const EAN = ["ean_13", "ean_8", "upc_a", "upc_e"];
-let detectorP = null;
+const QR = ["qr_code"];
+const detectors = {};   // Formate → Promise<Detector>; nach dem Hintergrund neu anlegen (Android verliert sonst den Dienst)
 function loadScript(src) {
   return new Promise((ok, fail) => {
     const el = document.createElement("script");
@@ -1594,12 +1634,14 @@ function loadScript(src) {
     document.head.appendChild(el);
   });
 }
-function barcodeDetector() {
-  detectorP = detectorP || (async () => {
+function barcodeDetector(want = EAN, fresh = false) {
+  const key = want.join();
+  if (fresh) delete detectors[key];
+  const p = detectors[key] = detectors[key] || (async () => {
     if ("BarcodeDetector" in window) {
       try {
         const sup = await BarcodeDetector.getSupportedFormats();
-        const formats = EAN.filter(f => sup.includes(f));
+        const formats = want.filter(f => sup.includes(f));
         if (formats.length) return new BarcodeDetector({ formats });
       } catch (_) { /* dann ZXing */ }
     }
@@ -1609,16 +1651,22 @@ function barcodeDetector() {
       overrides: { locateFile: (path, prefix) => path.endsWith(".wasm") ? "/vendor/zxing_reader-3.1.6.wasm" : prefix + path },
       fireImmediately: true,
     });
-    return new lib.BarcodeDetector({ formats: EAN });
+    return new lib.BarcodeDetector({ formats: want });
   })();
-  detectorP.catch(() => { detectorP = null; });
-  return detectorP;
+  p.catch(() => { if (detectors[key] === p) delete detectors[key]; });
+  return p;
 }
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") for (const k in detectors) delete detectors[k];
+});
+// detect() mit Zeitlimit: nach dem Aufwachen bleibt die Erkennung sonst ohne Antwort hängen
+const detectWithin = (det, src, ms = 2500) => Promise.race([det.detect(src),
+  new Promise((_, fail) => setTimeout(() => fail(new Error("timeout")), ms))]);
 const eanOf = codes => (codes.find(x => /^\d{8,14}$/.test(x.rawValue)) || {}).rawValue;
 
 // Live-Kamera im Element #cam mit Barcode-Erkennung. onCode(code) bei jedem Treffer, onState("loading" | "ready" | Fehler).
 // Liefert sofort ein Objekt mit stop(). wake: Bildschirm anlassen (Einkaufsmodus), wo der Browser es kann.
-function liveScan(root, onCode, onState, wake = false) {
+function liveScan(root, onCode, onState, wake = false, formats = EAN, pick = eanOf) {
   const ctl = { stream: null, timer: null, stopped: false, lock: null };
   ctl.stop = () => {
     ctl.stopped = true; clearInterval(ctl.timer);
@@ -1629,21 +1677,30 @@ function liveScan(root, onCode, onState, wake = false) {
   (async () => {
     if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) return onState(new Error("keine Kamera"));
     try {
-      const detP = barcodeDetector();   // lädt parallel zum Kamerastart
+      const detP = barcodeDetector(formats);   // lädt parallel zum Kamerastart
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1280 } }, audio: false });
       if (ctl.stopped || $("#sheet").hidden) { stream.getTracks().forEach(t => t.stop()); return; }
       ctl.stream = stream;
       const v = $("#cam", root); v.srcObject = stream; await v.play();
       onState("loading");
-      const det = await detP;
+      let det = await detP;
       if (ctl.stopped) return;
       if (wake && navigator.wakeLock) { try { ctl.lock = await navigator.wakeLock.request("screen"); } catch (_) { /* egal */ } }
       onState("ready");
-      let busy = false;
+      let busy = false, fails = 0, warm = false;   // erster Aufruf darf dauern (ZXing lädt WASM)
       ctl.timer = setInterval(async () => {
-        if (ctl.stopped || busy || v.readyState < 2) return;
+        if (ctl.stopped || busy) return;
+        if (v.paused) v.play().catch(() => {});
+        if (v.readyState < 2) return;
         busy = true;
-        try { const c = eanOf(await det.detect(v)); if (c) onCode(c); } catch (_) { /* nächster Versuch */ }
+        try {
+          const native = window.BarcodeDetector && det instanceof window.BarcodeDetector;
+          const c = pick(await detectWithin(det, v, warm || native ? 2500 : 20000)); fails = 0; warm = true;
+          if (c && !ctl.stopped) onCode(c);
+        } catch (_) {
+          // hängt oder scheitert wiederholt (typisch nach dem Hintergrund): Erkennung neu anlegen
+          if (++fails >= 2) { fails = 0; warm = false; try { det = await barcodeDetector(formats, true); } catch (_) { /* nächster Versuch */ } }
+        }
         busy = false;
       }, 250);
     } catch (err) { ctl.stop(); onState(err || new Error("Kamera")); }
@@ -1685,13 +1742,13 @@ function openScan(meal) {
       if (!file) return;
       hint("Lese Barcode aus dem Foto …");
       try {
-        const det = await barcodeDetector();
-        let code = eanOf(await det.detect(file));
+        const det = await barcodeDetector(EAN, true);
+        let code = eanOf(await detectWithin(det, file, 8000));
         if (!code) {   // sehr große Fotos: verkleinert noch einmal versuchen
           const bmp = await createImageBitmap(file), k = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
           const cv = document.createElement("canvas"); cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
           cv.getContext("2d").drawImage(bmp, 0, 0, cv.width, cv.height);
-          code = eanOf(await det.detect(cv));
+          code = eanOf(await detectWithin(det, cv, 8000));
         }
         if (code) return lookup(code);
         hint("Kein Barcode erkannt. Näher ran, gerade halten, oder die Zahl eintippen.");
@@ -2049,6 +2106,66 @@ function chartSteps(days, goal) {
     <text x="0" y="${(Y(goal) + 3).toFixed(1)}">${num.format(goal / 1000)}k</text>${bars}</svg>`;
 }
 
+/* ---------- Eigene Gerichte, Mahlzeiten und Lebensmittel verwalten (Mehr) ---------- */
+
+let ownTab = "recipes";
+async function openOwn() {
+  const back = () => openOwn();
+  let own;
+  try { own = (await api("/api/foods/lists")).custom; } catch (e) { return toast(e.message); }
+  const groups = {
+    recipes: own.filter(f => f.source === "recipe"),
+    meals: S.templates || [],
+    foods: own.filter(f => f.source === "custom"),
+  };
+  const tabs = [["recipes", "🍲 Gerichte"], ["meals", "⭐ Mahlzeiten"], ["foods", "✏️ Lebensmittel"]];
+  const row = (id, title, meta, val) => `<li class="tap" data-own="${esc(String(id))}"><div class="bd"><b>${esc(title)}</b><div class="meta">${meta}</div></div>
+    ${val ? `<span class="val">${val}</span>` : ""}<button class="btn icon small-icon" data-own-rm="${esc(String(id))}" aria-label="${esc(title)} löschen">🗑</button></li>`;
+  const body = () => {
+    const items = groups[ownTab];
+    if (!items.length) return `<div class="empty">${{ recipes: "Noch keine Gerichte. Unten eins anlegen oder beim Erfassen per Rezept-Link übernehmen.",
+      meals: "Noch keine Mahlzeiten gemerkt. Auf Heute bei einer Mahlzeit mit Einträgen auf ☆ tippen.",
+      foods: "Noch keine eigenen Lebensmittel." }[ownTab]}</div>`;
+    return `<ul class="list">${items.map(x => ownTab === "meals"
+      ? row(x.id, x.name, esc(x.items.map(i => shortName(i.name)).join(", ")), fmtVal(x.points, x.kcal))
+      : row(x.id, x.name, `${x.brand ? esc(x.brand) + " · " : ""}${Math.round(x.kcal || 0)} kcal/100 g`, "")).join("")}</ul>`;
+  };
+  openSheet(`<h2>Eigene Sachen</h2>
+    <div class="tabs" id="own-tabs">${tabs.map(([k, l]) => `<button data-t="${k}" class="${ownTab === k ? "on" : ""}">${l} (${groups[k].length})</button>`).join("")}</div>
+    <div id="own-list">${body()}</div>
+    <p class="note">Antippen zum Bearbeiten. Löschen lässt schon erfasste Einträge unverändert.</p>
+    <div class="row nowrap mt"><button class="btn grow" id="own-recipe">🍲 Gericht anlegen</button><button class="btn grow" id="own-food">✏️ Eigenes Lebensmittel</button></div>`, root => {
+    const draw = () => {
+      $$("#own-tabs [data-t]", root).forEach(b => b.classList.toggle("on", b.dataset.t === ownTab));
+      $("#own-list", root).innerHTML = body();
+    };
+    $("#own-tabs", root).onclick = e => { const b = e.target.closest("[data-t]"); if (b) { ownTab = b.dataset.t; draw(); } };
+    $("#own-list", root).onclick = async e => {
+      const rm = e.target.closest("[data-own-rm]"), li = e.target.closest("[data-own]");
+      if (!li) return;
+      const id = li.dataset.own;
+      if (ownTab === "meals") {
+        const t = groups.meals.find(x => x.id === id); if (!t) return;
+        if (rm) { if (await deleteTemplate(t)) back(); return; }
+        return openTemplateEdit(t, back);
+      }
+      const f = groups[ownTab].find(x => String(x.id) === id); if (!f) return;
+      if (rm) {
+        if (!confirm(`„${f.name}“ löschen? Schon erfasste Einträge bleiben.`)) return;
+        try { const r = await api(`/api/foods/${f.id}`, { method: "DELETE" }); lists = null; toast(`${f.source === "recipe" ? "Gericht" : "Lebensmittel"} ${r.result}`); }
+        catch (err) { return toast(err.message); }
+        return back();
+      }
+      try {
+        if (f.source === "recipe") openRecipe(await api(`/api/recipes/${f.id}`), mealNow(), back);
+        else openCustom(await api(`/api/foods/${f.id}`), mealNow(), "", back);
+      } catch (err) { toast(err.message); }
+    };
+    $("#own-recipe", root).onclick = () => openRecipe(null, mealNow(), back);
+    $("#own-food", root).onclick = () => openCustom({ name: "" }, mealNow(), "", back);
+  }, true);
+}
+
 /* ---------- Mehr ---------- */
 
 async function viewMore() {
@@ -2058,6 +2175,8 @@ async function viewMore() {
       <p>${s.mode === "keep" ? "Gewicht halten" : `Abnehmen, ${num1.format(s.pace)} kg pro Woche`} · Ziel ${num1.format(s.goal_weight)} kg</p>
       <p class="note">Grundumsatz ${num.format(b.bmr)} kcal × Aktivität ${String(s.activity).replace(".", ",")}${b.adjust ? ` ${b.adjust > 0 ? "+" : "−"} ${num.format(Math.abs(b.adjust))} kcal Korrektur (Statistik → Echter Bedarf)` : ""} = ${num.format(b.tdee)} kcal Bedarf${b.deficit ? ` − ${num.format(b.deficit)} kcal Defizit` : ""} = <b>${num.format(b.target)} kcal</b> = <b>${b.points} Punkte</b> pro Tag (bei ${num1.format(b.weight)} kg).
       ${b.floor_hit ? `Untergrenze ${num.format(b.floor)} kcal greift – weniger wäre auf Dauer nicht gesund.` : ""}</p></div>
+    <div class="card"><div class="card-head"><h2>🍲 Eigene Sachen</h2><button class="btn small" id="own">Verwalten</button></div>
+      <p class="note">Gerichte, gemerkte Mahlzeiten und eigene Lebensmittel ansehen, bearbeiten oder löschen.</p></div>
     <div class="card"><h2>Anzeige</h2>${chipGroup("display", [["points", "Punkte"], ["kcal", "Kalorien"]], s.display)}
       <label class="f mt"><span>Design (nur dieses Gerät)</span></label>
       ${chipGroup("theme", [["system", "📱 System"], ["light", "☀️ Hell"], ["dark", "🌙 Dunkel"]], savedTheme())}
@@ -2095,8 +2214,8 @@ async function viewMore() {
       <div id="plans">${plansHtml(s)}</div>
       <div class="row nowrap mt"><input type="text" id="new-trigger" class="grow" maxlength="40" placeholder="Neuer Auslöser, z. B. Feierabend"><button class="btn small" id="add-trigger">+</button></div>
       <button class="btn small mt" id="plans-save">Speichern</button></div>
-    <div class="card"><div class="card-head"><h2>📱 Geräte</h2><button class="btn small primary" id="dev-code">Code eingeben</button></div><div id="devs"></div>
-      <p class="note">Neues Gerät: dort FitPath öffnen, QR-Code mit der Kamera scannen oder die Zahl über <b>Code eingeben</b> eintippen. Ohne zweites Gerät geht auch ein <button class="linkbtn" id="dev-link">Anmeldelink</button>.</p></div>
+    <div class="card"><div class="card-head"><h2>📱 Geräte</h2><div class="row nowrap"><button class="btn small primary" id="dev-scan">QR scannen</button><button class="btn small" id="dev-code">Code eingeben</button></div></div><div id="devs"></div>
+      <p class="note">Neues Gerät: dort FitPath öffnen, hier auf <b>QR scannen</b> tippen oder die Zahl über <b>Code eingeben</b> eintippen. Ohne zweites Gerät geht auch ein <button class="linkbtn" id="dev-link">Anmeldelink</button>.</p></div>
     <div class="card"><h2>💾 Daten</h2><a class="btn small" href="/api/export">Export als JSON</a></div>
     <div class="card"><div class="card-head"><h2>ℹ️ Quellen</h2><span class="pill">FitPath ${esc(S.version || "")}</span></div>
       <p class="note">Nährwerte: <b>Bundeslebensmittelschlüssel (BLS) 4.0</b>, Max Rubner-Institut (2025), Karlsruhe, DOI 10.25826/Data20251217-134202-0, Lizenz CC BY 4.0. Markenprodukte per Barcode: <b>Open Food Facts</b> (ODbL).</p>
@@ -2111,6 +2230,7 @@ async function viewMore() {
     if (group === "display") { S = await api("/api/settings", { method: "PUT", body: { display: val } }); toast(val === "kcal" ? "Anzeige in kcal" : "Anzeige in Punkten"); }
   });
   $("#edit-goals").onclick = openGoals;
+  $("#own").onclick = openOwn;
   bindPlans();
   $("#s-save").onclick = async () => {
     try { S = await api("/api/settings", { method: "PUT", body: { steps_baseline: +$("#s-base").value, steps_goal: +$("#s-goal").value } }); toast("Gespeichert"); }
@@ -2133,6 +2253,7 @@ async function viewMore() {
   $("#push-on").onclick = enablePush;
   $("#push-test").onclick = async () => { const r = await api("/api/push/test", { method: "POST" }); toast(r.sent ? `An ${r.sent} Gerät(e) gesendet` : "Kein Gerät angemeldet"); };
   $("#dev-code").onclick = openPairCode;
+  $("#dev-scan").onclick = openPairScan;
   $("#dev-link").onclick = async () => {
     const name = prompt("Name des Geräts (z. B. Tablet):", "") ?? null; if (name === null) return;
     const r = await api("/api/devices/link", { method: "POST", body: { name } });
