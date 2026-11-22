@@ -271,13 +271,15 @@ def get(conn, food_id: int) -> dict | None:
     return as_dict(row) if row else None
 
 
-def recent(conn, limit: int = 15) -> list:
-    """Zuletzt gegessen, je Lebensmittel mit der zuletzt gewählten Menge."""
+def recent(conn, limit: int = 15, meal: str | None = None) -> list:
+    """Zuletzt gegessen, je Lebensmittel mit der zuletzt gewählten Menge. Mit meal nur das, was
+    bei dieser Mahlzeit gegessen wurde (Menge dann auch von dort: Brot morgens 1 Scheibe, abends 2)."""
+    where, args = ("AND l.meal = ? ", (meal, limit)) if meal else ("", (limit,))
     rows = conn.execute(
         f"SELECT {', '.join('f.' + c.strip() for c in FOOD_COLS.split(','))}, l.grams AS last_grams, "
         "l.portion AS last_portion, MAX(l.ts) AS last_ts "
-        "FROM food_log l JOIN foods f ON f.id = l.food_id WHERE f.hidden = 0 "
-        "GROUP BY l.food_id ORDER BY last_ts DESC LIMIT ?", (limit,)).fetchall()
+        f"FROM food_log l JOIN foods f ON f.id = l.food_id WHERE f.hidden = 0 {where}"
+        "GROUP BY l.food_id ORDER BY last_ts DESC LIMIT ?", args).fetchall()
     out = []
     for r in rows:
         d = as_dict({k: r[k] for k in r.keys() if not k.startswith("last_")})

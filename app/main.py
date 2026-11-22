@@ -336,7 +336,8 @@ def food_search(q: str = "", device=Depends(auth.require)):
 @app.get("/api/foods/lists")
 def food_lists(device=Depends(auth.require)):
     with db.connect() as conn:
-        return {"recent": foods.recent(conn, 30), "favorites": foods.favorites(conn), "custom": foods.custom(conn),
+        return {"recent": foods.recent(conn, 30), "by_meal": {m: foods.recent(conn, 30, m) for m in diary.MEALS},
+                "favorites": foods.favorites(conn), "custom": foods.custom(conn),
                 "eatout": eatout.plates(conn)}
 
 

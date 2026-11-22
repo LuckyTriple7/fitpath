@@ -65,6 +65,11 @@ def test_flow():
     st = c.get("/api/state").json()
     assert any(e["zero"] and e["points"] == 0 for e in st["overview"]["entries"])
     assert st["recent"][0]["last_grams"] in (50, 150)
+    # „Zuletzt“ passend zur Mahlzeit: Brot nur beim Frühstück, Apfel nur bei Snacks
+    bm = c.get("/api/foods/lists").json()["by_meal"]
+    assert [f["id"] for f in bm["fruehstueck"]] == [brot["id"]]
+    assert [f["id"] for f in bm["snack"]] == [apfel["id"]]
+    assert bm["abend"] == []
 
     # eigenes Lebensmittel mit Barcode, danach per Barcode gefunden (ohne Netz)
     f = c.post("/api/foods", headers=H, json={"name": "Proteinriegel", "kcal": 350, "protein": 30, "sugar": 5,

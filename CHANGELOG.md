@@ -6,6 +6,9 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+### Geändert
+- **„Zuletzt“ passend zur Mahlzeit**: Beim Erfassen zeigt „Zuletzt“ nur, was du bei der gewählten Mahlzeit gegessen hast (Ei beim Frühstück, nicht beim Abendessen), mit der dort zuletzt genommenen Menge. Wechselt man oben die Mahlzeit, wechselt die Liste mit. Gibt es für eine Mahlzeit noch nichts, erscheint wie bisher alles Zuletzt-Gegessene mit Hinweis.
+
 ## [0.24.0] – 2026-11-21
 
 ### Neu

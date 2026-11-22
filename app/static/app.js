@@ -1105,7 +1105,7 @@ function openAdd(meal, query = "") {
     <div class="row nowrap mt"><button class="btn grow" id="recipe">🍲 Gericht anlegen</button><button class="btn grow" id="custom">✏️ Eigenes Lebensmittel</button></div>`, root => {
     const q = $("#q", root), res = $("#results", root);
     const curMeal = () => chipVal(root, "meal") || meal;
-    bindChips(root);
+    bindChips(root, group => { if (group === "meal" && !q.value.trim()) showLists(); });
     const showLists = async () => {
       $("#add-tabs", root).innerHTML = `<div class="tabs">${[["recent", "Zuletzt"], ["favorites", "Favoriten"], ["meals", "⭐ Mahlzeiten"], ["custom", "Eigene"], ["eatout", "🍽️ Auswärts"]]
         .map(([k, l]) => `<button data-t="${k}" class="${addTab === k ? "on" : ""}">${l}</button>`).join("")}</div>`;
@@ -1114,7 +1114,15 @@ function openAdd(meal, query = "") {
         res.innerHTML = `<div class="empty">Lade …</div>`;
         try { lists = await api("/api/foods/lists"); } catch (_) { res.innerHTML = `<div class="empty">Offline – Suche geht nur mit Verbindung.</div>`; return; }
       }
-      const items = lists[addTab] || [];
+      let items = lists[addTab] || [];
+      if (addTab === "recent") {   // passend zur gewählten Mahlzeit: Ei zum Frühstück erscheint nur beim Frühstück
+        const m = curMeal(), mine = (lists.by_meal || {})[m];
+        if (mine && mine.length) items = mine;
+        else if (items.length) {
+          res.innerHTML = `<p class="note">${MEAL_LABEL[m] ? `Für ${MEAL_LABEL[m]} noch nichts erfasst.` : ""} Zuletzt insgesamt:</p>${foodList(items)}`;
+          return;
+        }
+      }
       if (addTab === "eatout") { res.innerHTML = eatoutList(items); return; }
       if (addTab === "meals") {
         const t = S.templates || [];
@@ -1143,7 +1151,7 @@ function openAdd(meal, query = "") {
       const tp = e.target.closest("[data-tpl-open]");
       if (tp) { const t = (S.templates || []).find(x => x.id === tp.dataset.tplOpen); return t && openTemplate(t, curMeal()); }
       const li = e.target.closest("[data-food]"); if (!li) return;
-      const all = [...(lists ? [...lists.recent, ...lists.favorites, ...lists.custom, ...(lists.eatout || [])] : [])];
+      const all = [...(lists ? [...((lists.by_meal || {})[curMeal()] || []), ...lists.recent, ...lists.favorites, ...lists.custom, ...(lists.eatout || [])] : [])];
       let food = all.find(f => f.id === +li.dataset.food) || (res._hits || []).find(f => f.id === +li.dataset.food);
       if (!food) { try { food = await api(`/api/foods/${li.dataset.food}`); } catch (err) { return toast(err.message); } }
       openAmount(food, curMeal());
