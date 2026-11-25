@@ -58,3 +58,4 @@ Commit-Angaben bis 18.11.2026 beziehen sich auf das frühere Sammel-Repo, aus de
 - **20.11.2026** Gespeicherte Mahlzeiten („Mein Frühstück“ mit einem Tipp), Prognose fürs Zielgewicht (0.21.0)
 - **20.11.2026** „💡 Passt noch“: Vorschläge aus eigenen Sachen, die in die übrigen Punkte passen
 - **25.11.2026** Doppelte Gewichte aus Health Connect (mehrere Apps) nur einmal (0.25.1); Refeed-Tage, Urlaub und Diätpause mit Budget je Tag
+- **25.11.2026** Tagesrückblick auf Heute: Makro-Ring, Balken je Mahlzeit, Richtwerte, „Was fehlt?“

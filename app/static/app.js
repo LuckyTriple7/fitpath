@@ -491,6 +491,7 @@ function viewToday() {
     ${o.plan && o.plan.kind === "urlaub" ? "" : fitsHtml(left)}
     ${quickHtml()}
     ${MEALS.map(([key, label, icon]) => mealHtml(key, label, icon)).join("")}
+    ${reviewHtml()}
     ${activityHtml()}
     ${weightMiniHtml()}`;
 
@@ -517,6 +518,7 @@ function viewToday() {
     if (t) logTemplate(t, bt.dataset.meal);
   }));
   bindChallenge();
+  $("#review") && ($("#review").ontoggle = e => store("fp_review_open", e.target.open));
   $("#plan-end") && ($("#plan-end").onclick = async () => { if (await endPause(o.plan.pause)) viewToday(); });
   $("#act-card") && ($("#act-card").onclick = e => {
     const li = e.target.closest("[data-workout]");
@@ -753,6 +755,96 @@ function mealHtml(key, label, icon) {
       <span class="val">${e.zero ? `<span class="zero">0 P</span>` : fmtVal(e.points, e.kcal || 0)}</span></li>`).join("")}</ul>`
       : prevHtml(key)}
     ${tpls.length ? `<div class="chips scroll" style="margin-top:8px">${tpls.map(t => `<button class="chip" data-tpl="${esc(t.id)}" data-meal="${key}">⭐ ${esc(t.name)} · ${fmtVal(t.points, t.kcal)}</button>`).join("")}</div>` : ""}</div>`;
+}
+
+// Tagesrückblick: Energie-Anteil der Makros, Aufteilung je Mahlzeit, Richtwerte und was noch fehlt.
+// Energie je Gramm: Eiweiß 4, Fett 9, Kohlenhydrate 4, Alkohol 7 kcal.
+const MACROS = [["protein", "Eiweiß", 4], ["fat", "Fett", 9], ["carbs", "Kohlenhydrate", 4], ["alcohol", "Alkohol", 7]];
+
+function daySums(list) {
+  const s = { kcal: 0, protein: 0, fat: 0, satfat: 0, carbs: 0, sugar: 0, fiber: 0, alcohol: 0, salt: 0 };
+  for (const e of list) for (const k in s) s[k] += +e[k] || 0;
+  return s;
+}
+
+function macroKcal(s) { return MACROS.map(([k, label, f]) => ({ k, label, kcal: s[k] * f, g: s[k] })); }
+
+function donutSvg(parts, center) {
+  const r = 46, c = 2 * Math.PI * r, sum = parts.reduce((a, p) => a + p.kcal, 0) || 1;
+  const shown = parts.filter(p => p.kcal > 0), gap = shown.length > 1 ? 3 : 0;
+  let off = 0;
+  const arcs = shown.map(p => {
+    const len = p.kcal / sum * c, dash = Math.max(len - gap, 1);
+    const el = `<circle cx="60" cy="60" r="${r}" fill="none" stroke="var(--m-${p.k})" stroke-width="16"
+      stroke-dasharray="${dash.toFixed(1)} ${(c - dash).toFixed(1)}" stroke-dashoffset="${(-off).toFixed(1)}"><title>${p.label}: ${num.format(Math.round(p.g))} g · ${Math.round(p.kcal / sum * 100)} %</title></circle>`;
+    off += len;
+    return el;
+  }).join("");
+  return `<svg class="donut" viewBox="0 0 120 120" role="img" aria-label="Energie-Anteil von Eiweiß, Fett, Kohlenhydraten und Alkohol">
+    <circle cx="60" cy="60" r="${r}" fill="none" stroke="var(--card-2)" stroke-width="16"/>
+    <g transform="rotate(-90 60 60)">${arcs}</g>
+    <text x="60" y="58" text-anchor="middle" class="big">${num.format(Math.round(center))}</text>
+    <text x="60" y="74" text-anchor="middle">kcal</text></svg>`;
+}
+
+function mealBars(entries) {
+  const rows = MEALS.map(([key, label, icon]) => {
+    const list = entries.filter(e => e.meal === key);
+    return list.length ? { label, icon, s: daySums(list) } : null;
+  }).filter(Boolean);
+  const max = Math.max(...rows.map(r => r.s.kcal), 1);
+  return rows.map(r => {
+    const parts = macroKcal(r.s), sum = parts.reduce((a, p) => a + p.kcal, 0) || 1;
+    const width = r.s.kcal / max * 100;
+    return `<div class="mbar"><div class="top"><span>${r.icon} ${r.label}</span><b>${num.format(Math.round(r.s.kcal))} kcal</b></div>
+      <div class="segs" style="width:${width.toFixed(1)}%">${parts.filter(p => p.kcal > 0).map(p =>
+        `<i style="flex:${p.kcal.toFixed(1)};background:var(--m-${p.k})" title="${p.label}: ${num.format(Math.round(p.g))} g · ${Math.round(p.kcal / sum * 100)} %"></i>`).join("")}</div></div>`;
+  }).join("");
+}
+
+// Richtwert-Balken: "min" = mindestens erreichen (grün ab 100 %), "max" = Obergrenze (rot darüber)
+function limitBar(label, v, limit, kind, note, base = "var(--accent)") {
+  const pct = Math.min(v / limit, 1) * 100, done = kind === "min" ? v >= limit : v > limit;
+  const color = kind === "min" ? (done ? "var(--good)" : base) : (done ? "var(--bad)" : v > limit * .8 ? "var(--warn)" : "var(--muted)");
+  return `<div class="hbar"><div class="top"><span>${label}</span><b>${num1.format(v)} g <small class="muted">/ ${kind === "max" ? "max. " : ""}${num.format(limit)} g</small></b></div>
+    <div class="bar"><i style="width:${pct.toFixed(1)}%;background:${color}"></i></div><small>${note}${done ? (kind === "min" ? " ✓" : " – überschritten") : ""}</small></div>`;
+}
+
+function reviewTips(s, prot, satMax, isToday) {
+  const tips = [], pre = isToday ? "noch " : "";
+  if (s.protein < prot * .9) tips.push(`🥚 Eiweiß: ${pre}${num.format(Math.round(prot - s.protein))} g bis zum Richtwert – z. B. Magerquark, Skyr, Hähnchen, Thunfisch, Linsen, Tofu.`);
+  if (s.fiber < 30 * .9) tips.push(`🥦 Ballaststoffe: ${pre}${num.format(Math.round(30 - s.fiber))} g bis 30 g – Gemüse, Hülsenfrüchte, Vollkorn, Haferflocken, Beeren.`);
+  if (s.sugar > 50) tips.push(`🍬 Zucker ${num.format(Math.round(s.sugar))} g – über der WHO-Grenze von 50 g. Süßes oder Säfte morgen durch Obst ersetzen?`);
+  if (s.satfat > satMax) tips.push(`🧈 Gesättigtes Fett ${num.format(Math.round(s.satfat))} g – mehr als 10 % deines Budgets. Pflanzenöl, Nüsse, Fisch statt Butter, Wurst, Käse.`);
+  if (s.salt > 6) tips.push(`🧂 Salz ${num1.format(s.salt)} g – über 6 g (DGE). Fertiggerichte, Wurst und Brot liefern das meiste.`);
+  if (s.alcohol > 0) tips.push(`🍷 Alkohol ${num.format(Math.round(s.alcohol))} g = ${num.format(Math.round(s.alcohol * 7))} kcal ohne Sättigung.`);
+  return tips;
+}
+
+function reviewHtml() {
+  const o = S.overview, list = o.entries;
+  if (!list.length) return "";
+  const s = daySums(list), parts = macroKcal(s), sum = parts.reduce((a, p) => a + p.kcal, 0) || 1;
+  const prot = Math.round((o.budget.weight || 70) * 1.0);
+  const target = (o.plan && o.plan.target) || o.budget.target;
+  const satMax = Math.round(target * .1 / 9);
+  const tips = reviewTips(s, prot, satMax, o.day === S.today);
+  const open = store("fp_review_open");
+  return `<details class="card review" id="review"${open === false ? "" : " open"}><summary class="card-head"><h2>📊 Tagesrückblick</h2><small>${list.length} ${list.length === 1 ? "Eintrag" : "Einträge"}</small></summary>
+    <div class="macro">${donutSvg(parts, s.kcal)}
+      <ul class="mlegend">${parts.filter(p => p.k !== "alcohol" || p.g > 0).map(p => `<li><i style="background:var(--m-${p.k})"></i><span>${p.label}</span>
+        <b>${num.format(Math.round(p.g))} g</b><small>${Math.round(p.kcal / sum * 100)} %</small></li>`).join("")}</ul></div>
+    <p class="note">Anteil an der Energie. Grob gut: Eiweiß 20–30 %, Fett 25–35 %, Kohlenhydrate 40–55 %.</p>
+    <h3>Je Mahlzeit</h3>${mealBars(list)}
+    <h3>Richtwerte</h3>
+    ${limitBar("Eiweiß", s.protein, prot, "min", "1 g je kg Körpergewicht", "var(--m-protein)")}
+    ${limitBar("Ballaststoffe", s.fiber, 30, "min", "DGE-Empfehlung")}
+    ${limitBar("Zucker", s.sugar, 50, "max", "WHO-Obergrenze")}
+    ${limitBar("Gesättigtes Fett", s.satfat, satMax, "max", "10 % deines Budgets")}
+    ${limitBar("Salz", s.salt, 6, "max", "DGE-Obergrenze")}
+    <h3>💡 Was fehlt?</h3>
+    ${tips.length ? `<ul class="tips">${tips.map(t => `<li>${t}</li>`).join("")}</ul>` : `<p class="note">Alles im grünen Bereich – gute Balance! 👍</p>`}
+  </details>`;
 }
 
 function activityHtml() {

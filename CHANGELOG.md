@@ -6,6 +6,9 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+### Neu
+- **📊 Tagesrückblick** auf Heute (unter den Mahlzeiten, einklappbar): Ring mit dem Energie-Anteil von Eiweiß, Fett, Kohlenhydraten und Alkohol (Gramm und %), Balken je Mahlzeit nach Makros, Richtwerte für Eiweiß (1 g/kg), Ballaststoffe (30 g), Zucker (max. 50 g), gesättigtes Fett (max. 10 % des Budgets) und Salz (max. 6 g) sowie „💡 Was fehlt?“ mit konkreten Tipps. Funktioniert auch für vergangene Tage.
+
 ## [0.26.0] – 2026-11-25
 
 ### Neu
