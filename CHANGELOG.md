@@ -6,6 +6,8 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+## [0.23.1] – 2026-11-25
+
 ### Behoben
 - Gewichte aus Health Connect standen teilweise doppelt oder dreifach in der Liste, wenn mehrere Apps dieselbe Messung dorthin schreiben (z. B. Samsung Health und Health Sync aus Google Fit). Gleicher Wert (±0,05) innerhalb von 10 Minuten zählt jetzt als eine Messung, vorhandene Doppel werden beim Start entfernt. Trend und Prognose waren nicht betroffen.
 
