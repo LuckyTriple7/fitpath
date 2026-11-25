@@ -32,6 +32,11 @@ Verglichen mit WW, Yazio, MyFitnessPal, Lose It!, FDDB, Noom, MacroFactor. Grob 
 ### Ideen
 - Wasser trinken zählen (siehe oben).
 - Receive/Writeback von Life Dashboard: Gewicht aus FitPath nach Health Connect zurückschreiben.
+- **Tagesrückblick ausbauen** (nach 0.27.0):
+  - Wochenansicht: Ø-Makros und Richtwerte über 7 Tage statt nur eines Tages.
+  - „Was fehlt?“ mit eigenen Lebensmitteln: statt fester Beispiele (Skyr, Linsen …) eiweiß- oder ballaststoffreiche Sachen vorschlagen, die man schon gegessen hat und die in die übrigen Punkte passen (wie „Passt noch“).
+  - Wasser als weitere Zeile bei den Richtwerten (hängt an „Wasser“ oben).
+  - Uhrzeit-Verteilung: wann am Tag die kcal anfallen, um Abend-Snacks sichtbar zu machen.
 
 ## Erledigt
 
