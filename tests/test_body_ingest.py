@@ -126,3 +126,44 @@ def test_status_diagnostics():
         assert "Send history" in st["active_calories"]["state"]
         last = ingest.status(conn)["last"]
         assert any(x["summary"].get("steps_last", {}).get("steps") == 626 for x in last)
+
+
+def test_weight_twins_from_several_apps():
+    """Samsung Health und Health Sync schreiben dieselbe Messung mit eigener uuid nach Health Connect."""
+    with db.connect() as conn:
+        for table in ("body", "ingest_log"):
+            conn.execute(f"DELETE FROM {table}")
+        r = ingest.apply(conn, {"source": "health_connect", "sequence": 300, "weight": [
+            {"kilograms": 97.0, "time": "2026-11-18T06:10:00Z", "uuid": "sh1", "source": "com.sec.android.app.shealth"},
+            {"kilograms": 97.0, "time": "2026-11-18T06:10:00Z", "uuid": "hs1", "source": "nl.appyhapps.healthsync"},
+            {"kilograms": 96.999, "time": "2026-11-18T06:12:30Z", "uuid": "gf1", "source": "com.google.android.apps.fitness"},
+            # anderer Wert oder deutlich später: eigene Messung
+            {"kilograms": 96.4, "time": "2026-11-18T06:11:00Z", "uuid": "sh2"},
+            {"kilograms": 97.0, "time": "2026-11-18T18:00:00Z", "uuid": "sh3"},
+        ]})
+        assert r["weight"] == 3 and r["twins"] == 2
+        ids = sorted(x[0] for x in conn.execute("SELECT ext_id FROM body WHERE kind = 'weight'"))
+        assert ids == ["sh1", "sh2", "sh3"]
+        # spätere Lieferung derselben Datensätze: Zwilling bleibt draußen, der bekannte wird aktualisiert
+        r = ingest.apply(conn, {"source": "health_connect", "sequence": 301, "weight": [
+            {"kilograms": 97.0, "time": "2026-11-18T06:10:00Z", "uuid": "hs1"},
+            {"kilograms": 97.0, "time": "2026-11-18T06:10:00Z", "uuid": "sh1"}]})
+        assert r["weight"] == 1 and r["twins"] == 1
+        assert conn.execute("SELECT COUNT(*) FROM body WHERE kind = 'weight'").fetchone()[0] == 3
+
+
+def test_dedupe_existing_twins():
+    with db.connect() as conn:
+        conn.execute("DELETE FROM body")
+        rows = [("2026-11-22T06:00:00+00:00", 96.0, "hc", "a"), ("2026-11-22T06:00:00+00:00", 96.0, "hc", "b"),
+                ("2026-11-22T06:05:00+00:00", 96.0, "hc", "c"), ("2026-11-22T06:00:00+00:00", 96.0, "manual", None),
+                ("2026-11-22T06:00:00+00:00", 96.0, "hc", None)]
+        for ts, v, src, ext in rows:
+            conn.execute("INSERT INTO body (ts, day, kind, value, source, ext_id) VALUES (?, '2026-11-22', 'weight', ?, ?, ?)",
+                         (ts, v, src, ext))
+        conn.execute("INSERT INTO body (ts, day, kind, value, source, ext_id) VALUES "
+                     "('2026-11-22T06:00:00+00:00', '2026-11-22', 'fat', 24.0, 'hc', 'f')")
+        assert db.dedupe_body(conn) == 3
+        left = conn.execute("SELECT kind, source, ext_id FROM body ORDER BY id").fetchall()
+        assert [tuple(x) for x in left] == [("weight", "hc", "a"), ("weight", "manual", None), ("fat", "hc", "f")]
+        assert db.dedupe_body(conn) == 0
