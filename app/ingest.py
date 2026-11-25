@@ -9,6 +9,7 @@ Format laut docs/webhook.md im Repo owen282000/life-dashboard-companion-app:
   Datum gilt der Wert aus der Lieferung mit der höchsten `sequence`.
 - `weight` (kilograms, time, uuid), `body_fat` (percentage, time, uuid).
 - `deleted_records`: [{type, uuid}] – Gewicht/Körperfett mit dieser uuid entfernen.
+  Dieselbe Messung von mehreren Apps (eigene uuids) wird nur einmal gespeichert, siehe db.body_twin.
 - `test: true` = Test-Ping ohne Daten.
 
 Rohe Schrittdatensätze werden nicht addiert (Handy und Uhr schreiben doppelt),
@@ -143,7 +144,7 @@ def apply(conn, payload: dict, raw: bytes | None = None) -> dict:
         return {"ok": True, "duplicate": True}
 
     now = db.iso(db.now_utc())
-    summary = {"days": 0, "weight": 0, "body_fat": 0, "exercise": 0, "deleted": 0}
+    summary = {"days": 0, "weight": 0, "body_fat": 0, "twins": 0, "exercise": 0, "deleted": 0}
 
     # Tagessummen: nur übernehmen, wenn die Lieferung neuer ist als die gespeicherte
     for t in payload.get("daily_totals") or []:
@@ -180,11 +181,16 @@ def apply(conn, payload: dict, raw: bytes | None = None) -> dict:
                 ts = db.parse(str(rec["time"]))
             except ValueError:
                 continue
+            ext, value = str(rec["uuid"])[:80], round(value, 2)
+            known = conn.execute("SELECT 1 FROM body WHERE kind = ? AND ext_id = ?", (kind, ext)).fetchone()
+            if not known and db.body_twin(conn, kind, db.iso(ts), value):
+                summary["twins"] += 1   # dieselbe Messung von einer anderen App
+                continue
             conn.execute(
                 "INSERT INTO body (ts, day, kind, value, source, ext_id) VALUES (?, ?, ?, ?, 'hc', ?) "
                 "ON CONFLICT(kind, ext_id) WHERE ext_id IS NOT NULL DO UPDATE SET ts = excluded.ts, "
                 "day = excluded.day, value = excluded.value",
-                (db.iso(ts), db.local_day(ts), kind, round(value, 2), str(rec["uuid"])[:80]))
+                (db.iso(ts), db.local_day(ts), kind, value, ext))
             summary[key] += 1
 
     # Trainingseinheiten (Schlüssel ist die uuid aus Health Connect)

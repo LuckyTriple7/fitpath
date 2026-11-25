@@ -255,6 +255,29 @@ def check_writable() -> None:
             f"'./data:/data' ein benanntes Volume nehmen (siehe README, Einrichten mit Dockge).") from None
 
 
+# Dieselbe Messung kommt über Health Connect oft mehrfach an, weil mehrere Apps sie mit eigener uuid
+# dorthin schreiben (z. B. Samsung Health und Health Sync aus Google Fit). Als Zwilling gilt ein Wert
+# derselben Art aus Health Connect, gleich bis auf Rundung und höchstens TWIN_MINUTES auseinander.
+TWIN_MINUTES = 10
+TWIN_DELTA = 0.051
+_TWIN = (f"o.source = 'hc' AND o.kind = {{t}}.kind AND abs(o.value - {{t}}.value) <= {TWIN_DELTA} "
+         f"AND abs(julianday(o.ts) - julianday({{t}}.ts)) * 1440 <= {TWIN_MINUTES}")
+
+
+def body_twin(conn, kind: str, ts: str, value: float) -> bool:
+    """Gibt es diese Messung aus Health Connect schon (von einer anderen App)?"""
+    sql = (f"SELECT 1 FROM (SELECT ? AS kind, ? AS ts, ? AS value) n "
+           f"JOIN body o ON {_TWIN.format(t='n')} LIMIT 1")
+    return conn.execute(sql, (kind, ts, value)).fetchone() is not None
+
+
+def dedupe_body(conn) -> int:
+    """Vorhandene Zwillinge entfernen, der zuerst gespeicherte Eintrag bleibt."""
+    return conn.execute(
+        f"DELETE FROM body WHERE source = 'hc' AND EXISTS "
+        f"(SELECT 1 FROM body o WHERE o.id < body.id AND {_TWIN.format(t='body')})").rowcount
+
+
 def init() -> None:
     check_writable()
     with connect() as conn:
@@ -264,6 +287,7 @@ def init() -> None:
             for name, typ in cols:
                 if name not in have:
                     conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {typ}")
+        dedupe_body(conn)
 
 
 @contextmanager
