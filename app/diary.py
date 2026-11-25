@@ -2,7 +2,7 @@
 
 from datetime import date, timedelta
 
-from . import body, db, points, training
+from . import body, db, plan, points, training
 
 MEALS = ("fruehstueck", "mittag", "abend", "snack")
 
@@ -78,7 +78,8 @@ def overview(conn, s: dict, day: str) -> dict:
     tot = totals(conn, first, day)
     act = activity(conn, first, day, b["weight"], int(s.get("steps_baseline") or 5000))
     merged = {k: {**tot.get(k, {}), **act.get(k, {})} for k in set(tot) | set(act)}
-    week = points.week_summary(merged, d, b["points"], b["target"])
+    week_plan = plan.week(s, b, points.week_start(d))
+    week = points.week_summary(merged, d, b["points"], b["target"], week_plan)
     t = tot.get(day) or {}
     # Für „Wie gestern“: Mahlzeiten des Vortags
     prev_day = (d - timedelta(days=1)).isoformat()
@@ -96,6 +97,8 @@ def overview(conn, s: dict, day: str) -> dict:
         "prev_day": prev_day,
         "prev": prev,
         "budget": b,
+        "plan": week_plan[day],
+        "week_plan": {k: {"kind": v["kind"], "points": v["points"], "target": v["target"]} for k, v in week_plan.items()},
         "week": week,
         "entries": entries(conn, day),
         "totals": {k: round(v, 1) if isinstance(v, float) else v for k, v in t.items()},
@@ -110,13 +113,15 @@ def history(conn, s: dict, days: int) -> dict:
     b = budget(conn, s)
     tot = totals(conn, first, today.isoformat())
     act = activity(conn, first, today.isoformat(), b["weight"], int(s.get("steps_baseline") or 5000))
+    budgets = plan.days(s, b, first, today)
     series = []
     d = date.fromisoformat(first)
     while d <= today:
         k = d.isoformat()
-        t, a = tot.get(k) or {}, act.get(k) or {}
+        t, a, p = tot.get(k) or {}, act.get(k) or {}, budgets[k]
         series.append({
             "day": k, "points": t.get("points", 0), "kcal": round(t.get("kcal", 0)), "entries": t.get("entries", 0),
+            "plan": p["kind"], "budget_points": p["points"], "budget_kcal": p["target"],
             "protein": round(t.get("protein", 0)), "fat": round(t.get("fat", 0)), "carbs": round(t.get("carbs", 0)),
             "fiber": round(t.get("fiber", 0), 1), "sugar": round(t.get("sugar", 0)),
             "steps": a.get("steps"), "act_points": a.get("act_points", 0), "act_kcal": a.get("act_kcal", 0),
@@ -124,13 +129,14 @@ def history(conn, s: dict, days: int) -> dict:
             "train_points": points.round_points(a.get("train_kcal", 0) / points.KCAL_PER_POINT),
         })
         d += timedelta(days=1)
-    logged = [x for x in series if x["entries"] and x["day"] != today.isoformat()]
+    # Urlaubstage zählen nicht: dort wird höchstens ein Teil erfasst
+    logged = [x for x in series if x["entries"] and x["day"] != today.isoformat() and x["plan"] != "urlaub"]
     n = len(logged) or 1
     green = sum(t.get("kcal_green", 0) for t in tot.values())
     yellow = sum(t.get("kcal_yellow", 0) for t in tot.values())
     red = sum(t.get("kcal_red", 0) for t in tot.values())
     all_kcal = green + yellow + red or 1
-    in_budget = sum(1 for x in logged if x["points"] <= b["points"] + x["act_points"])
+    in_budget = sum(1 for x in logged if x["points"] <= x["budget_points"] + x["act_points"])
     with_steps = [x["steps"] for x in series if x["steps"]]
     weights = body.trend_series(body.daily_weights(conn))
     return {

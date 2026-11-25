@@ -6,6 +6,12 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+### Neu
+- **🍝 Refeed-Tage** (Mehr): bis zu 2 feste Wochentage, z. B. Sa/So, auf Erhaltung statt mit Defizit. Die übrigen Tage werden dafür etwas knapper, das Wochendefizit bleibt gleich. Auf Heute zeigt der Refeed-Tag sein Budget mit dem Tipp, das Mehr aus Kohlenhydraten zu holen; „Nur diese Woche anders“ tauscht einmalig (z. B. Freitag statt Samstag). Die Untergrenze bleibt geschützt.
+- **🌴 Urlaub** (Mehr → Pausen): Zeitraum ohne Erfassen. Keine Erinnerungen, die Serie reißt nicht ab, Wochenreserve, Tage im Budget und Statistik lassen die Tage weg. Der Echte Bedarf rechnet erst ab dem 4. Tag nach dem Urlaub wieder, damit das Urlaubswasser die Schätzung nicht verfälscht. Auch nachträglich eintragbar.
+- **⏸ Diätpause** (Mehr → Pausen): 1–2 Wochen mit Budget auf Erhaltung, weiter erfassen, danach automatisch zurück.
+- Budget je Tag überall: Ring, Wochenreserve, Wochenstreifen (🍝/🌴/⏸), Statistik, Tage im Budget, Wochen-Challenge.
+
 ## [0.25.1] – 2026-11-25
 
 ### Behoben

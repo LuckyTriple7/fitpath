@@ -155,6 +155,9 @@ DEFAULTS = {
     "mode": "lose",             # lose | keep
     "pace": 0.5,                # kg pro Woche im Modus "lose"
     "tdee_adjust": 0,           # kcal-Korrektur des Bedarfs aus dem adaptiven Bedarf (± 500)
+    "refeed_plan": [],          # [{from: Montag, days: [5, 6]}] Refeed-Wochentage ab dieser Woche (plan.py)
+    "refeed_weeks": {},         # {Montag: [Tage]} Tausch für eine einzelne Woche
+    "pauses": [],               # [{start, end, kind: urlaub | erhaltung}]
     # Anzeige
     "display": "points",        # points | kcal
     "steps_baseline": 5000,     # Schritte, die der Aktivitätsfaktor schon abdeckt

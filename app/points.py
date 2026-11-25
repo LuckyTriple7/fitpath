@@ -166,14 +166,23 @@ def week_start(day: date) -> date:
     return day - timedelta(days=day.weekday())
 
 
-def week_summary(days: dict, today: date, budget_points: int, budget_kcal: int) -> dict:
+def week_summary(days: dict, today: date, budget_points: int, budget_kcal: int, plan: dict | None = None) -> dict:
     """days: {JJJJ-MM-TT: {"points", "kcal", "entries", "act_points", "act_kcal"}}.
 
     Reserve: Für jeden vergangenen Tag dieser Woche mit mindestens einem Eintrag
     wandert der Rest (Budget + Aktivität − verbraucht) in die Reserve, höchstens
     RESERVE_CAP je Tag. Ein überzogener Tag zieht von der Reserve ab. Tage ohne
     Eintrag zählen nicht (sonst wächst die Reserve, wenn man nichts erfasst).
+
+    plan: Budget je Tag aus plan.week ({Tag: {points, target, kind}}), sonst gilt überall
+    budget_points/budget_kcal. Urlaubstage zählen nicht für die Reserve.
     """
+    plan = plan or {}
+
+    def budget(key):
+        p = plan.get(key)
+        return (p["points"], p["target"]) if p else (budget_points, budget_kcal)
+
     start = week_start(today)
     res_p, res_k = 0, 0.0
     per_day = []
@@ -181,19 +190,22 @@ def week_summary(days: dict, today: date, budget_points: int, budget_kcal: int) 
     while d <= today:
         key = d.isoformat()
         x = days.get(key) or {}
+        bp, bk = budget(key)
         used_p, used_k = int(x.get("points") or 0), float(x.get("kcal") or 0)
         act_p, act_k = int(x.get("act_points") or 0), float(x.get("act_kcal") or 0)
-        left_p = budget_points + act_p - used_p
-        left_k = budget_kcal + act_k - used_k
-        if d < today and x.get("entries"):
+        left_p = bp + act_p - used_p
+        left_k = bk + act_k - used_k
+        vacation = (plan.get(key) or {}).get("kind") == "urlaub"
+        if d < today and x.get("entries") and not vacation:
             res_p += min(left_p, RESERVE_CAP_POINTS)
             res_k += min(left_k, RESERVE_CAP_KCAL)
         per_day.append({"day": key, "points": used_p, "kcal": round(used_k), "entries": int(x.get("entries") or 0),
                         "left_points": left_p, "left_kcal": round(left_k)})
         d += timedelta(days=1)
     t = days.get(today.isoformat()) or {}
-    left_p = budget_points + int(t.get("act_points") or 0) - int(t.get("points") or 0)
-    left_k = budget_kcal + float(t.get("act_kcal") or 0) - float(t.get("kcal") or 0)
+    bp, bk = budget(today.isoformat())
+    left_p = bp + int(t.get("act_points") or 0) - int(t.get("points") or 0)
+    left_k = bk + float(t.get("act_kcal") or 0) - float(t.get("kcal") or 0)
     return {
         "start": start.isoformat(),
         "reserve_points": res_p,

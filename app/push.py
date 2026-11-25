@@ -4,6 +4,7 @@ Erinnerungen (alle abschaltbar, Ruhezeiten und Höchstzahl pro Tag gelten):
 - Wiegen: an den gewählten Wochentagen zur gewählten Uhrzeit, wenn noch kein Gewicht da ist.
 - Mittag: zur gewählten Uhrzeit, wenn heute noch nichts erfasst ist.
 - Abend: zur gewählten Uhrzeit, wenn heute weniger als zwei Mahlzeiten erfasst sind.
+Im Urlaub (plan.py) kommt keine Erinnerung.
 """
 
 import asyncio
@@ -15,7 +16,7 @@ from datetime import datetime
 
 from datetime import timedelta
 
-from . import db, motivation
+from . import db, motivation, plan
 
 VAPID_FILE = os.path.join(db.DATA_DIR, "vapid_private.pem")
 VAPID_SUB = os.environ.get("VAPID_SUB") or os.environ.get("PUBLIC_URL") or "https://localhost"
@@ -121,6 +122,8 @@ def tick() -> None:
             return
         loc = db.local(db.now_utc())
         today = loc.date().isoformat()
+        if plan.is_vacation(s, loc.date()):
+            return
         if in_quiet(s, loc) or _sent_today(conn, loc) >= int(s.get("push_max_per_day") or 3):
             return
         cur = (loc.hour, loc.minute)

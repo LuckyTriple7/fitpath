@@ -9,11 +9,13 @@ Erfahrungspunkte (XP):
   erfasster Tag 10 · Tag im Budget 10 · Schrittziel erreicht 10 · Trainingstag 10 · gewogen 5 ·
   Heißhunger überstanden 15 · Abzeichen 50 · Wochen-Challenge 50
 Trainingstag: mindestens training.TRAIN_DAY_MINUTES Minuten Training (Spazieren zählt über die Schritte).
+Tag im Budget: mit dem Budget dieses Tages (Refeed-Tage, Diätpause, plan.py). Urlaubstage reißen
+die Serie nicht ab und zählen nicht mit.
 """
 
 from datetime import date, timedelta
 
-from . import body, db, diary, points, training
+from . import body, db, diary, plan, points, training
 
 XP = {"logged": 10, "budget": 10, "steps": 10, "train": 10, "weigh": 5, "resisted": 15, "badge": 50, "challenge": 50}
 
@@ -86,6 +88,7 @@ def day_data(conn, s: dict, first: date, last: date) -> dict:
     b = diary.budget(conn, s)
     tot = diary.totals(conn, f, l)
     act = diary.activity(conn, f, l, b["weight"], int(s.get("steps_baseline") or 5000))
+    budgets = plan.days(s, b, first, last)
     zero = dict(conn.execute("SELECT day, COUNT(*) FROM food_log WHERE zero = 1 AND day BETWEEN ? AND ? GROUP BY day",
                              (f, l)).fetchall())
     weighed = {r[0] for r in conn.execute("SELECT DISTINCT day FROM body WHERE kind = 'weight' AND day BETWEEN ? AND ?", (f, l))}
@@ -102,7 +105,8 @@ def day_data(conn, s: dict, first: date, last: date) -> dict:
                   "protein": t.get("protein", 0.0), "fiber": t.get("fiber", 0.0), "zero": zero.get(k, 0),
                   "steps": a.get("steps") or 0, "act_points": a.get("act_points", 0),
                   "train": (a.get("train_minutes") or 0) >= training.TRAIN_DAY_MINUTES, "swim": bool(a.get("swim")),
-                  "weighed": k in weighed, "resisted": resisted.get(k, 0)}
+                  "weighed": k in weighed, "resisted": resisted.get(k, 0),
+                  "budget": budgets[k]["points"], "vacation": budgets[k]["kind"] == "urlaub"}
     return {"days": out, "budget": b}
 
 
@@ -115,26 +119,30 @@ def _start(conn, s: dict, today: date) -> date:
     return min(db.parse_day(v), today) if v else today
 
 
-def _in_budget(x: dict, budget_points: int) -> bool:
-    return x["entries"] > 0 and x["points"] <= budget_points + x["act_points"]
+def _in_budget(x: dict) -> bool:
+    return x["entries"] > 0 and not x["vacation"] and x["points"] <= x["budget"] + x["act_points"]
 
 
 def summary(conn, s: dict, today: date | None = None) -> dict:
     """Kennzahlen über die ganze Zeit."""
     today = today or db.parse_day(db.today())
     dd = day_data(conn, s, _start(conn, s, today), today)
-    days, b = dd["days"], dd["budget"]
+    days = dd["days"]
     goal = int(s.get("steps_goal") or 8000)
     keys = sorted(days)
     past = [k for k in keys if k < today.isoformat()]
     logged = [k for k in keys if days[k]["entries"]]
-    # Serie: aufeinanderfolgende Tage mit Eintrag, endend heute oder gestern
+    # Serie: aufeinanderfolgende Tage mit Eintrag, endend heute oder gestern; Urlaub überspringen
     best = cur = 0
     for k in keys:
+        if days[k]["vacation"]:
+            continue
         cur = cur + 1 if days[k]["entries"] else 0
         best = max(best, cur)
     streak = 0
     for k in reversed(keys):
+        if days[k]["vacation"]:
+            continue
         if days[k]["entries"]:
             streak += 1
         elif k == today.isoformat():
@@ -147,7 +155,7 @@ def summary(conn, s: dict, today: date | None = None) -> dict:
         "logged_days": len(logged),
         "streak": streak,
         "best_streak": best,
-        "budget_days": sum(1 for k in past if _in_budget(days[k], b["points"])),
+        "budget_days": sum(1 for k in past if _in_budget(days[k])),
         "steps_goal_days": sum(1 for k in keys if days[k]["steps"] >= goal),
         "max_steps": max((days[k]["steps"] for k in keys), default=0),
         "train_days": sum(1 for k in keys if days[k]["train"]),
@@ -169,7 +177,7 @@ def week_counts(conn, s: dict, today: date) -> dict:
     t = today.isoformat()
     return {
         "full_days": sum(1 for x in days.values() if x["meals"] >= 3),
-        "budget_days": sum(1 for k, x in days.items() if k < t and _in_budget(x, b["points"])),
+        "budget_days": sum(1 for k, x in days.items() if k < t and _in_budget(x)),
         "steps_goal_days": sum(1 for x in days.values() if x["steps"] >= goal),
         "zero_entries": sum(x["zero"] for x in days.values()),
         "weigh_days": sum(1 for x in days.values() if x["weighed"]),

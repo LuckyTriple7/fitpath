@@ -7,6 +7,8 @@ Verbrauch pro Tag = Ø Zufuhr − Gewichtsänderung pro Tag × 7.700 kcal/kg
   Halb erfasste Tage würden die Zufuhr und damit den Verbrauch zu niedrig schätzen.
 - Gewichtsänderung: Steigung einer Regressionsgeraden über die Wiegewerte (nicht über den Trend,
   der läuft hinterher). Ihr Standardfehler ergibt die Unsicherheit in kcal.
+- Urlaub (plan.py): Der Zeitraum beginnt frühestens RECOVERY_DAYS nach dem letzten Urlaub. Dort wird
+  nicht erfasst, und die Zunahme danach ist zum großen Teil Wasser.
 - Vergleich mit dem Modell: Formel (Grundumsatz × Aktivitätsfaktor) plus die im Zeitraum
   gutgeschriebene Aktivität. Die Differenz wird als Korrektur `tdee_adjust` vorgeschlagen.
 """
@@ -14,7 +16,7 @@ Verbrauch pro Tag = Ø Zufuhr − Gewichtsänderung pro Tag × 7.700 kcal/kg
 import math
 from datetime import date, timedelta
 
-from . import body, db, diary, points
+from . import body, db, diary, plan, points
 
 WINDOW_DAYS = 28
 MIN_DAYS = 14                  # so viele Tage seit dem ersten Eintrag
@@ -52,6 +54,10 @@ def estimate(conn, s: dict, today: date | None = None) -> dict:
     if not first_row:
         return {**base, "status": "early", "days": 0, "weighins": 0}
     start = max(last - timedelta(days=WINDOW_DAYS - 1), date.fromisoformat(first_row))
+    start, after = plan.adaptive_start(s, start, last)
+    if after:
+        base["after_pause"] = after.isoformat()
+        base["ready"] = (after + timedelta(days=MIN_DAYS)).isoformat()
     days = (last - start).days + 1
     weights = [(d, kg) for d, kg in body.daily_weights(conn, start.isoformat()) if d <= last.isoformat()]
     info = {**base, "days": max(days, 0), "weighins": len(weights), "first": start.isoformat(), "last": last.isoformat()}

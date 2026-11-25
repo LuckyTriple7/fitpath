@@ -14,7 +14,7 @@ import httpx2
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 
-from . import __version__, adaptive, ai, auth, eatout, backup, body, db, diary, foods, ingest, meals, motivation, points, push, recipe_import, swaps, training
+from . import __version__, adaptive, ai, auth, eatout, backup, body, db, diary, foods, ingest, meals, motivation, plan, points, push, recipe_import, swaps, training
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 MAX_INGEST_BYTES = 12 * 1024 * 1024
@@ -241,15 +241,38 @@ VALIDATORS = {
 }
 
 
+def _save_plan(conn, key: str, value) -> None:
+    """Refeed-Tage und Pausen (plan.py): brauchen das heutige Datum und die bisherigen Werte."""
+    s, today = db.get_settings(conn), db.parse_day(db.today())
+    if key == "pauses":
+        db.set_setting(conn, "pauses", plan.clean_pauses(value, today))
+    elif key == "refeed_days":
+        days = plan.clean_days(value)
+        db.set_setting(conn, "refeed_plan", plan.set_refeed(s, days, today))
+        # ein Tausch für diese oder nächste Woche passt nicht mehr zu den neuen Tagen
+        db.set_setting(conn, "refeed_weeks", {k: v for k, v in (s.get("refeed_weeks") or {}).items()
+                                              if k < plan.monday(today).isoformat()})
+    elif key == "refeed_week":
+        v = dict(value)
+        days = None if v.get("days") is None else plan.clean_days(v["days"])
+        db.set_setting(conn, "refeed_weeks", plan.set_week(s, db.parse_day(v["week"]), days, today))
+
+
+PLAN_KEYS = ("pauses", "refeed_days", "refeed_week")
+
+
 def _save_settings(conn, data: dict) -> None:
     if not isinstance(data, dict):
         raise HTTPException(400, "Einstellungen als Objekt erwartet")
     for key, value in data.items():
-        if key not in VALIDATORS:
+        if key not in VALIDATORS and key not in PLAN_KEYS:
             continue
         try:
-            db.set_setting(conn, key, VALIDATORS[key](value))
-        except (TypeError, ValueError):
+            if key in PLAN_KEYS:
+                _save_plan(conn, key, value)
+            else:
+                db.set_setting(conn, key, VALIDATORS[key](value))
+        except (TypeError, ValueError, KeyError):
             raise HTTPException(400, f"ungültiger Wert für {key}")
 
 
@@ -259,7 +282,8 @@ def _state(conn, day: str | None = None) -> dict:
     return {
         "settings": db.public_settings(s),
         "today": db.today(),
-        "overview": diary.overview(conn, s, day),
+        "overview": (ov := diary.overview(conn, s, day)),
+        "plan": plan.info(s, ov["budget"], db.parse_day(db.today())),
         "motivation": motivation.state(conn, s),
         "body": body.summary(conn, s),
         "recent": foods.recent(conn, 12),

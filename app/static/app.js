@@ -393,6 +393,52 @@ function viewError(e) {
 
 /* ---------- Heute ---------- */
 
+/* ---------- Refeed und Pausen (app/plan.py) ---------- */
+
+const PLAN_ICON = { refeed: "🍝", urlaub: "🌴", erhaltung: "⏸" };
+const PAUSE_LABEL = { urlaub: "🌴 Urlaub", erhaltung: "⏸ Diätpause" };
+
+function fmtRange(p) {
+  const o = { weekday: "short", day: "2-digit", month: "2-digit" };
+  return p.start === p.end ? fmtDay(p.start, o) : `${fmtDay(p.start, o)} – ${fmtDay(p.end, o)}`;
+}
+
+/* Hinweiszeile unter dem Wochenstreifen: Budgets der Woche, wenn sie sich unterscheiden */
+function planWeekNote(o) {
+  const days = Object.entries(o.week_plan || {});
+  const ref = days.filter(([, v]) => v.kind === "refeed"), norm = days.find(([, v]) => v.kind === "normal");
+  if (!ref.length || !norm) return "";
+  const P = isPoints(), val = v => P ? `${v.points} P` : `${num.format(v.target)} kcal`;
+  const names = ref.map(([d]) => WEEKDAYS[(new Date(d + "T12:00:00").getDay() + 6) % 7]).join("/");
+  return `<p class="note" style="margin:8px 0 0">🍝 Refeed ${names}: ${val(ref[0][1])} · übrige Tage ${val(norm[1])}</p>`;
+}
+
+/* Karte auf Heute für Refeed-Tag, Diätpause und Urlaub */
+function planHtml(o, isToday) {
+  const p = o.plan; if (!p || p.kind === "normal") return "";
+  const P = isPoints(), base = o.budget, val = (pts, kcal) => P ? `${pts} P` : `${num.format(kcal)} kcal`;
+  const end = p.pause ? fmtDay(p.pause.end, { weekday: "short", day: "2-digit", month: "2-digit" }) : "";
+  const btn = isToday && p.pause ? `<button class="btn small" id="plan-end">Beenden</button>` : "";
+  if (p.kind === "urlaub") return `<div class="card" style="padding:12px 16px;border-color:var(--good)">
+    <div class="spread"><b>🌴 Urlaub bis ${end}</b>${btn}</div>
+    <p class="note">Nichts erfassen nötig, Erinnerungen sind aus. Die Serie läuft weiter, Wochenreserve und Echter Bedarf lassen die Tage weg. Genieß es!</p></div>`;
+  if (p.kind === "erhaltung") return `<div class="card" style="padding:12px 16px">
+    <div class="spread"><b>⏸ Diätpause bis ${end}</b>${btn}</div>
+    <p class="note">Budget auf Erhaltung: ${val(p.points, p.target)} statt ${val(base.points, base.target)}. Weiter erfassen, nur ohne Defizit – danach geht es automatisch weiter.</p></div>`;
+  const carbs = Math.round((o.totals || {}).carbs || 0);
+  return `<div class="card" style="padding:12px 16px">
+    <div class="spread"><b>🍝 Refeed-Tag</b><small>${val(p.points, p.target)} statt ${val(base.points, base.target)}</small></div>
+    <p class="note">Heute ohne Defizit. Das Mehr am besten aus Kohlenhydraten (Kartoffeln, Reis, Nudeln, Brot, Obst), Eiweiß wie immer, wenig Fett und Alkohol.${carbs ? ` Kohlenhydrate bisher: <b>${carbs} g</b>.` : ""}</p></div>`;
+}
+
+async function endPause(p) {
+  if (!p || !confirm("Pause beenden? Ab heute gilt wieder das normale Budget.")) return false;
+  const yesterday = addDays(S.today, -1);
+  const list = (S.settings.pauses || []).flatMap(x => x.start !== p.start ? [x] : p.start > yesterday ? [] : [{ ...x, end: yesterday }]);
+  try { S = await api("/api/settings", { method: "PUT", body: { pauses: list } }); toast("Pause beendet"); return true; }
+  catch (e) { toast(e.message); return false; }
+}
+
 function ringSvg(frac, over) {
   const r = 92, c = 2 * Math.PI * r, f = Math.max(0, Math.min(frac || 0, 1));
   return `<svg viewBox="0 0 210 210" aria-hidden="true">
@@ -402,7 +448,8 @@ function ringSvg(frac, over) {
 }
 
 function viewToday() {
-  const o = S.overview, b = o.budget, w = o.week, t = o.totals || {};
+  const o = S.overview, w = o.week, t = o.totals || {};
+  const b = { ...o.budget, ...(o.plan ? { points: o.plan.points, target: o.plan.target } : {}) };
   const P = isPoints();
   const act = o.activity || {};
   const budget = P ? b.points : b.target;
@@ -433,12 +480,15 @@ function viewToday() {
       <div class="week" id="week">${WEEKDAYS.map((wd, i) => {
         const day = addDays(monday, i), d = weekDays[day];
         const cls = day > S.today ? "future" : !d || !d.entries ? "" : (P ? d.left_points : d.left_kcal) >= 0 ? "ok" : "over";
-        return `<div class="${cls}${day === o.day ? " cur" : ""}" data-day="${day}">${wd}<b>${d && d.entries ? num.format(P ? d.points : d.kcal) : "–"}</b></div>`;
+        const kind = (o.week_plan && o.week_plan[day] || {}).kind;
+        return `<div class="${cls}${day === o.day ? " cur" : ""}" data-day="${day}">${wd}<b>${d && d.entries ? num.format(P ? d.points : d.kcal) : PLAN_ICON[kind] || "–"}</b></div>`;
       }).join("")}</div>
+      ${planWeekNote(o)}
     </div>
+    ${planHtml(o, isToday)}
     ${challengeHtml()}
     ${levelHtml()}
-    ${fitsHtml(left)}
+    ${o.plan && o.plan.kind === "urlaub" ? "" : fitsHtml(left)}
     ${quickHtml()}
     ${MEALS.map(([key, label, icon]) => mealHtml(key, label, icon)).join("")}
     ${activityHtml()}
@@ -467,6 +517,7 @@ function viewToday() {
     if (t) logTemplate(t, bt.dataset.meal);
   }));
   bindChallenge();
+  $("#plan-end") && ($("#plan-end").onclick = async () => { if (await endPause(o.plan.pause)) viewToday(); });
   $("#act-card") && ($("#act-card").onclick = e => {
     const li = e.target.closest("[data-workout]");
     if (li) return openWorkout(((o.activity || {}).workouts || []).find(x => x.id === li.dataset.workout));
@@ -2003,7 +2054,7 @@ async function viewStats() {
     </div>
     ${adaptiveHtml(d.adaptive, P)}
     <div class="card"><div class="card-head"><h2>${P ? "Punkte" : "kcal"} pro Tag</h2><small>Budget ${P ? b.points + " P" : num.format(b.target) + " kcal"}</small></div>
-      ${chartDaily(d.days, P ? "points" : "kcal", P ? b.points : b.target, P ? "act_points" : "act_kcal")}
+      ${chartDaily(d.days, P ? "points" : "kcal", P ? b.points : b.target, P ? "act_points" : "act_kcal", P ? "budget_points" : "budget_kcal")}
       <div class="legend"><span><i style="background:var(--good)"></i>im Budget</span><span><i style="background:var(--bad)"></i>drüber</span><span><i style="background:var(--muted)"></i>Budget + Aktivität</span></div></div>
     <div class="card"><div class="card-head"><h2>🥗 Nährstoffe</h2><small>Ø pro erfasstem Tag</small></div>
       ${none ? `<div class="empty">Noch kein abgeschlossener Tag.</div>` : `${hbar("Eiweiß", a.protein, protTarget, "g", `Richtwert ≈ ${protTarget} g (1 g je kg) – macht satt und schützt die Muskeln`)}
@@ -2052,6 +2103,8 @@ function adaptiveHtml(a, P) {
   if (!a) return "";
   const head = `<div class="card-head"><h2>🔥 Echter Bedarf</h2><small>letzte ${a.window_days} Tage</small></div>`;
   const adj = a.adjust ? `<p class="note">Aktive Korrektur: <b>${a.adjust > 0 ? "+" : "−"}${num.format(Math.abs(a.adjust))} kcal</b> pro Tag. <button class="linkbtn" id="adj-reset">Zurücksetzen</button></p>` : "";
+  if (a.status === "early" && a.after_pause) return `<div class="card">${head}
+    <p class="note">🌴 Nach dem Urlaub rechnet FitPath neu, ab ${fmtDay(a.after_pause, { day: "2-digit", month: "2-digit" })} (Urlaub und die 3 Tage danach zählen nicht, die Waage zeigt dann vor allem Wasser). Frühestens ab ${fmtDay(a.ready, { day: "2-digit", month: "2-digit" })} gibt es wieder eine Schätzung, mit mindestens ${a.min_weighins} Wiegewerten.</p>${adj}</div>`;
   if (a.status === "early") return `<div class="card">${head}
     <p class="note">Ab ${a.min_days} Tagen mit Einträgen und ${a.min_weighins} Wiegewerten rechnet FitPath aus, wie viel du wirklich verbrauchst, statt nur nach Formel. Bisher: ${a.days} ${a.days === 1 ? "Tag" : "Tage"}, ${a.weighins} Wiegewerte.</p>${adj}</div>`;
   if (a.status === "gaps") return `<div class="card">${head}
@@ -2068,6 +2121,7 @@ function adaptiveHtml(a, P) {
       : a.confidence === "niedrig" ? `<p class="note">Für einen Vorschlag noch zu unsicher, das Gewicht schwankt stark. Regelmäßiger wiegen hilft.</p>`
       : `<p class="note">✅ Passt: Rechnung und Wirklichkeit liegen nah beieinander.</p>`}
     ${adj}
+    ${a.after_pause ? `<p class="note">🌴 Gerechnet ab ${fmtDay(a.after_pause, { day: "2-digit", month: "2-digit" })}, Urlaub und die Tage danach zählen nicht.</p>` : ""}
     <p class="note">Stimmt nur, wenn du alles erfasst, auch 0-Punkte-Lebensmittel. Ein Kilo Körperfett ≈ ${num.format(7700)} kcal.</p></div>`;
 }
 
@@ -2086,16 +2140,18 @@ function hbar(label, v, target, u, note = "") {
     ${pct != null ? `<div class="bar"><i style="width:${pct}%;${pct >= 100 ? "background:var(--good)" : ""}"></i></div>` : ""}${note ? `<small>${note}</small>` : ""}</div>`;
 }
 
-function chartDaily(days, key, budget, actKey) {
+function chartDaily(days, key, budget, actKey, budgetKey) {
   if (!days.some(x => x.entries)) return `<div class="empty">Noch keine Einträge im Zeitraum.</div>`;
   const W = 340, H = 150, P = 26, n = days.length;
-  const max = Math.max(budget * 1.3, ...days.map(x => x[key]), ...days.map(x => budget + (x[actKey] || 0)));
+  const dayBudget = x => x[budgetKey] ?? budget;
+  const max = Math.max(budget * 1.3, ...days.map(x => x[key]), ...days.map(x => dayBudget(x) + (x[actKey] || 0)));
   const bw = (W - P) / n, Y = v => H - 16 - v / max * (H - 26);
   const bars = days.map((x, i) => {
     if (!x.entries) return "";
-    const lim = budget + (x[actKey] || 0), h = x[key] / max * (H - 26);
-    return `<rect x="${(P + i * bw + bw * .14).toFixed(1)}" y="${Y(x[key]).toFixed(1)}" width="${Math.max(bw * .72, 1).toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${x[key] <= lim ? "var(--good)" : "var(--bad)"}"><title>${x.day}: ${x[key]}</title></rect>
-      ${x[actKey] ? `<line x1="${(P + i * bw).toFixed(1)}" x2="${(P + (i + 1) * bw).toFixed(1)}" y1="${Y(lim).toFixed(1)}" y2="${Y(lim).toFixed(1)}" stroke="var(--muted)" stroke-width="1.5"/>` : ""}`;
+    const lim = dayBudget(x) + (x[actKey] || 0), h = x[key] / max * (H - 26);
+    const fill = x.plan === "urlaub" ? "var(--muted)" : x[key] <= lim ? "var(--good)" : "var(--bad)";
+    return `<rect x="${(P + i * bw + bw * .14).toFixed(1)}" y="${Y(x[key]).toFixed(1)}" width="${Math.max(bw * .72, 1).toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${fill}"><title>${x.day}: ${x[key]}${PLAN_ICON[x.plan] ? " " + PLAN_ICON[x.plan] : ""}</title></rect>
+      ${x[actKey] || dayBudget(x) !== budget ? `<line x1="${(P + i * bw).toFixed(1)}" x2="${(P + (i + 1) * bw).toFixed(1)}" y1="${Y(lim).toFixed(1)}" y2="${Y(lim).toFixed(1)}" stroke="var(--muted)" stroke-width="1.5"/>` : ""}`;
   }).join("");
   const labels = days.map((x, i) => (n <= 10 || i % Math.ceil(n / 7) === 0) ? `<text x="${(P + i * bw + bw / 2).toFixed(1)}" y="${H - 3}" text-anchor="middle">${x.day.slice(8, 10)}.${x.day.slice(5, 7)}</text>` : "").join("");
   return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Verbrauch pro Tag">
@@ -2176,6 +2232,109 @@ async function openOwn() {
 
 /* ---------- Mehr ---------- */
 
+function dayNames(days) { return days.map(i => WEEKDAYS[i]).join("/"); }
+
+function refeedStatus() {
+  const pl = S.plan, b = S.overview.budget, P = isPoints();
+  const val = v => P ? `${v.points} P` : `${num.format(v.target)} kcal`;
+  if (pl.refeed && pl.normal) return `Diese Woche${pl.week_override ? " (getauscht)" : ""}: <b>${dayNames(pl.week_days)} ${val(pl.refeed)}</b>, übrige Tage <b>${val(pl.normal)}</b> statt ${val(b)}.`;
+  if (pl.blocked === "keep") return "Refeed gibt es nur beim Abnehmen – beim Halten ist jeder Tag schon auf Erhaltung.";
+  if (pl.blocked === "pause") return "Diese Woche kein Refeed, es liegt eine Pause darin.";
+  if (pl.blocked === "floor") return `Passt nicht: Die übrigen Tage kämen unter ${num.format(b.floor)} kcal. Langsameres Tempo oder 1 Tag wählen.`;
+  return pl.week_override ? "Diese Woche (getauscht): kein Refeed." : "Aus. Bis zu 2 Tage wählen, z. B. Sa und So.";
+}
+
+function planCardHtml() {
+  if (!S.plan) return "";
+  const pl = S.plan, today = S.today;
+  const state = p => p.end < today ? "vorbei" : p.start > today ? "geplant" : "läuft";
+  return `<div class="card" id="plan-card"><h2>🍝 Refeed-Tage</h2>
+      ${chipGroup("refeed", WEEKDAYS.map((d, i) => [i, d]), pl.refeed_days, true)}
+      <p class="note" id="refeed-status">${refeedStatus()}</p>
+      <div class="row"><button class="btn small" id="refeed-week">Nur diese Woche anders</button></div>
+      <p class="note">An Refeed-Tagen isst du auf Erhaltung, die übrigen Tage sind dafür etwas knapper – das Wochendefizit bleibt gleich. Gilt ab dieser Woche.</p>
+    </div>
+    <div class="card"><div class="card-head"><h2>⏸ Pausen</h2><div class="row nowrap"><button class="btn small" data-pause-new="urlaub">+ Urlaub</button><button class="btn small" data-pause-new="erhaltung">+ Diätpause</button></div></div>
+      ${pl.pauses.length ? `<ul class="list">${pl.pauses.map(p => `<li><div class="bd"><b>${PAUSE_LABEL[p.kind]}</b><div class="meta">${fmtRange(p)} · ${state(p)}</div></div>
+        ${state(p) === "läuft" ? `<button class="btn small" data-pause-end="${p.start}">Beenden</button>` : `<button class="btn small danger" data-pause-del="${p.start}" aria-label="Löschen">🗑</button>`}</li>`).join("")}</ul>` : ""}
+      <p class="note"><b>Urlaub</b>: nichts erfassen, keine Erinnerungen, die Serie reißt nicht ab. <b>Diätpause</b>: 1–2 Wochen auf Erhaltung, weiter erfassen. Danach geht es jeweils automatisch weiter. Auch nachträglich eintragbar.</p></div>`;
+}
+
+function bindPlanCard() {
+  $("#refeed-week") && ($("#refeed-week").onclick = openRefeedWeek);
+  $$("[data-pause-new]").forEach(bt => (bt.onclick = () => openPause(bt.dataset.pauseNew)));
+  $$("[data-pause-end]").forEach(bt => (bt.onclick = async () => {
+    if (await endPause(S.settings.pauses.find(p => p.start === bt.dataset.pauseEnd))) viewMore();
+  }));
+  $$("[data-pause-del]").forEach(bt => (bt.onclick = async () => {
+    if (!confirm("Pause löschen?")) return;
+    try { S = await api("/api/settings", { method: "PUT", body: { pauses: S.settings.pauses.filter(p => p.start !== bt.dataset.pauseDel) } }); viewMore(); }
+    catch (e) { toast(e.message); }
+  }));
+}
+
+async function saveRefeed(days) {
+  const chips = () => $$('[data-group="refeed"] .chip').forEach(c => c.classList.toggle("on", S.plan.refeed_days.map(String).includes(c.dataset.val)));
+  if (days.length > 2) { toast("Höchstens 2 Refeed-Tage"); return chips(); }
+  try { S = await api("/api/settings", { method: "PUT", body: { refeed_days: days } }); }
+  catch (e) { toast(e.message); return chips(); }
+  $("#refeed-status").innerHTML = refeedStatus();
+  toast(days.length ? `Refeed ${dayNames(days)}` : "Refeed aus");
+}
+
+function openRefeedWeek() {
+  const pl = S.plan;
+  openSheet(`<h2>🍝 Diese Woche</h2>
+    <p class="note">Tausch nur für die Woche ab ${fmtDay(pl.week_start, { day: "2-digit", month: "2-digit" })}, z. B. Freitag statt Samstag wegen einer Feier. Danach gelten wieder ${pl.refeed_days.length ? dayNames(pl.refeed_days) : "keine Refeed-Tage"}.</p>
+    ${chipGroup("rw", WEEKDAYS.map((d, i) => [i, d]), pl.week_days, true)}
+    <div class="row mt"><button class="btn primary grow" id="rw-save">Speichern</button>${pl.week_override ? `<button class="btn" id="rw-reset">Wie immer</button>` : ""}</div>`, root => {
+    bindChips(root);
+    const save = async days => {
+      if (days && days.length > 2) return toast("Höchstens 2 Refeed-Tage");
+      try { S = await api("/api/settings", { method: "PUT", body: { refeed_week: { week: pl.week_start, days } } }); }
+      catch (e) { return toast(e.message); }
+      closeSheet(); toast("Gespeichert"); viewMore();
+    };
+    $("#rw-save", root).onclick = () => save(chipVal(root, "rw").map(Number));
+    $("#rw-reset", root) && ($("#rw-reset", root).onclick = () => save(null));
+  });
+}
+
+function openPause(kind) {
+  const start = S.today, weeks = 2;
+  openSheet(`<h2>⏸ Pause eintragen</h2>
+    ${chipGroup("pk", [["urlaub", PAUSE_LABEL.urlaub], ["erhaltung", PAUSE_LABEL.erhaltung]], kind)}
+    <p class="note" id="pk-note"></p>
+    <div class="grid2"><label class="f"><span>Von</span><input type="date" id="pz-start" value="${start}"></label>
+      <label class="f"><span>Bis</span><input type="date" id="pz-end" value="${addDays(start, weeks * 7 - 1)}"></label></div>
+    ${chipGroup("pw", [[1, "1 Woche"], [2, "2 Wochen"], [3, "3 Wochen"]], weeks)}
+    <button class="btn primary block mt" id="pz-save">Speichern</button>`, root => {
+    const notes = {
+      urlaub: "Nichts erfassen, keine Erinnerungen, die Serie reißt nicht ab. Wochenreserve, Tage im Budget und Echter Bedarf lassen die Tage weg. Nach dem Urlaub zeigt die Waage meist 1–2 kg mehr – vor allem Wasser, das in ein paar Tagen wieder weg ist.",
+      erhaltung: "Weiter erfassen, aber ohne Defizit: Das Budget steht auf deinem Bedarf. Bewährt sind 1–2 Wochen nach 6–12 Wochen Abnehmen. Danach geht es automatisch weiter.",
+    };
+    const note = () => { $("#pk-note", root).textContent = notes[chipVal(root, "pk")]; };
+    note();
+    bindChips(root, (group, v) => {
+      if (group === "pk") note();
+      if (group === "pw") $("#pz-end", root).value = addDays($("#pz-start", root).value || S.today, +v * 7 - 1);
+    });
+    $("#pz-save", root).onclick = async () => {
+      const p = { kind: chipVal(root, "pk"), start: $("#pz-start", root).value, end: $("#pz-end", root).value };
+      if (!p.start || !p.end) return toast("Von und Bis angeben");
+      if (p.end < p.start) return toast("Bis liegt vor Von");
+      const len = Math.round((new Date(p.end + "T12:00:00") - new Date(p.start + "T12:00:00")) / 864e5) + 1;
+      if (len > S.plan.max_days[p.kind]) return toast(`Höchstens ${S.plan.max_days[p.kind]} Tage`);
+      const all = S.settings.pauses || [];
+      const clash = all.find(x => x.start <= p.end && p.start <= x.end);
+      if (clash) return toast(`Überschneidet sich mit ${PAUSE_LABEL[clash.kind]} ${fmtRange(clash)}`);
+      try { S = await api("/api/settings", { method: "PUT", body: { pauses: [...all, p] } }); }
+      catch (e) { return toast(e.message); }
+      closeSheet(); toast("Pause eingetragen"); viewMore();
+    };
+  });
+}
+
 async function viewMore() {
   const s = S.settings, b = S.overview.budget;
   view.innerHTML = `
@@ -2183,6 +2342,7 @@ async function viewMore() {
       <p>${s.mode === "keep" ? "Gewicht halten" : `Abnehmen, ${num1.format(s.pace)} kg pro Woche`} · Ziel ${num1.format(s.goal_weight)} kg</p>
       <p class="note">Grundumsatz ${num.format(b.bmr)} kcal × Aktivität ${String(s.activity).replace(".", ",")}${b.adjust ? ` ${b.adjust > 0 ? "+" : "−"} ${num.format(Math.abs(b.adjust))} kcal Korrektur (Statistik → Echter Bedarf)` : ""} = ${num.format(b.tdee)} kcal Bedarf${b.deficit ? ` − ${num.format(b.deficit)} kcal Defizit` : ""} = <b>${num.format(b.target)} kcal</b> = <b>${b.points} Punkte</b> pro Tag (bei ${num1.format(b.weight)} kg).
       ${b.floor_hit ? `Untergrenze ${num.format(b.floor)} kcal greift – weniger wäre auf Dauer nicht gesund.` : ""}</p></div>
+    ${planCardHtml()}
     <div class="card"><div class="card-head"><h2>🍲 Eigene Sachen</h2><button class="btn small" id="own">Verwalten</button></div>
       <p class="note">Gerichte, gemerkte Mahlzeiten und eigene Lebensmittel ansehen, bearbeiten oder löschen.</p></div>
     <div class="card"><h2>Anzeige</h2>${chipGroup("display", [["points", "Punkte"], ["kcal", "Kalorien"]], s.display)}
@@ -2192,7 +2352,9 @@ async function viewMore() {
         <p class="note"><b>Punkte je Eintrag</b> = kcal ÷ 35 + gesättigtes Fett ÷ 4 + Zucker ÷ 10 + Alkohol ÷ 8 − Eiweiß ÷ 10 − Ballaststoffe ÷ 5 (Gramm, nie unter 0, gerundet). Eiweiß und Ballaststoffe machen satt und senken die Punkte, Zucker, gesättigtes Fett und Alkohol erhöhen sie.</p>
         <p class="note"><b>0 Punkte</b>: frisches Obst und Gemüse, Pilze, Sprossen, gegarte Hülsenfrüchte (nicht Saft, Trockenobst, Konserven mit Zucker). Pro Lebensmittel änderbar.</p>
         <p class="note"><b>Tagesbudget</b> = (kcal-Ziel − 200 kcal für 0-Punkte-Lebensmittel) ÷ 40. Wer satt machend isst, kommt damit auf sein kcal-Ziel, bei viel Zucker und Fett wird es knapper – genau so ist es gedacht. kcal-Ziel nach Mifflin-St Jeor, nie unter ${num.format(b.floor)} kcal, Abnahme höchstens 1 % des Gewichts pro Woche.</p>
-        <p class="note"><b>Wochenreserve</b>: Von jedem erfassten Tag wandern bis zu 4 ungenutzte Punkte in die Reserve, ein überzogener Tag zieht ab. Montag beginnt sie neu.</p>
+        <p class="note"><b>Wochenreserve</b>: Von jedem erfassten Tag wandern bis zu 4 ungenutzte Punkte in die Reserve, ein überzogener Tag zieht ab. Montag beginnt sie neu. Urlaubstage zählen nicht.</p>
+        <p class="note"><b>Refeed-Tage</b>: An bis zu 2 festen Wochentagen gilt der Bedarf statt des Ziels. Die übrigen Tage tragen das Defizit mit (Ziel − Refeed-Tage × Defizit ÷ übrige Tage), die Woche bleibt gleich. Nie unter ${num.format(b.floor)} kcal; in Wochen mit Pause kein Refeed.</p>
+        <p class="note"><b>Pausen</b>: Diätpause = Budget auf Bedarf, weiter erfassen. Urlaub = nichts erfassen; keine Erinnerungen, die Serie reißt nicht ab, Wochenreserve, Tage im Budget und Echter Bedarf lassen die Tage weg (der Echte Bedarf auch die 3 Tage danach).</p>
         <p class="note"><b>Aktivität</b>: Schritte über ${num.format(s.steps_baseline)} geben Punkte. Geschätzt ≈ 0,0005 kcal je Schritt und kg, davon nur die Hälfte – Schätzungen sind meist zu hoch.</p>
         <p class="note"><b>Training</b>: (Belastung in MET − 1) × kg × Stunden, also nur der Verbrauch über Ruhe, davon die Hälfte, höchstens ${S.training ? S.training.max_points_day : 15} Punkte am Tag. Schritte, die beim Gehen, Laufen oder Wandern schon gezählt haben, werden abgezogen.</p>
       </details></div>
@@ -2235,10 +2397,12 @@ async function viewMore() {
       applyTheme(val);
       return;
     }
+    if (group === "refeed") return saveRefeed(val.map(Number));
     if (group === "display") { S = await api("/api/settings", { method: "PUT", body: { display: val } }); toast(val === "kcal" ? "Anzeige in kcal" : "Anzeige in Punkten"); }
   });
   $("#edit-goals").onclick = openGoals;
   $("#own").onclick = openOwn;
+  bindPlanCard();
   bindPlans();
   $("#s-save").onclick = async () => {
     try { S = await api("/api/settings", { method: "PUT", body: { steps_baseline: +$("#s-base").value, steps_goal: +$("#s-goal").value } }); toast("Gespeichert"); }
