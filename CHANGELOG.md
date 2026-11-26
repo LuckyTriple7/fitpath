@@ -6,6 +6,9 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+### Geändert
+- Training antippen erklärt, warum eine Einheit „über Schritte“ zeigt: Ihre Schritte zählen schon im Schrittbonus, deshalb bleibt für das Training selbst nichts oder weniger übrig. Solange man heute unter der Grundlinie liegt, kündigt der Hinweis an, dass die Punkte später in den Schrittbonus wandern können.
+
 ## [0.29.0] – 2026-11-26
 
 ### Neu

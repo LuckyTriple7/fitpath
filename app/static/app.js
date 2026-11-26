@@ -992,6 +992,17 @@ function trainCredit(kind, inten, minutes, freeSteps) {
   return { met, kcal, covered, points: Math.floor(kcal / T.kcal_per_point + 0.5) };
 }
 
+// Warum eine Einheit „über Schritte“ zeigt oder später weniger bringt: ihre Schritte stecken auch im Schrittbonus
+function coveredNote(w) {
+  const sp = w && S.training.sports[w.kind];
+  if (!sp || !sp.spm) return "";
+  const own = Math.floor(sp.spm * w.minutes), base = num.format(S.settings.steps_baseline);
+  if (w.covered_steps && !w.kcal) return `<p class="note">👟 Die rund ${num.format(w.covered_steps)} Schritte dieser Einheit zählen schon im Schrittbonus oben, weil du heute über ${base} Schritte gekommen bist. Damit nichts doppelt zählt, bleibt für das Training selbst nichts übrig. Verloren geht nichts: Die Punkte stecken im Schrittbonus.</p>`;
+  if (w.covered_steps) return `<p class="note">👟 ${num.format(w.covered_steps)} Schritte dieser Einheit zählen schon im Schrittbonus oben. Hier steht nur, was die Einheit darüber hinaus verbraucht hat.</p>`;
+  if (S.overview.day === S.today && own > 0) return `<p class="note">👟 Die rund ${num.format(own)} Schritte dieser Einheit stecken auch in deinen Tagesschritten. Kommst du heute über ${base} Schritte, zählen sie über den Schrittbonus. Dann bringt das Training hier weniger oder zeigt „über Schritte“, insgesamt bleibt es etwa gleich.</p>`;
+  return "";
+}
+
 function openWorkout(w = null) {
   const T = S.training; if (!T) return;
   const a = S.overview.activity || {};
@@ -1001,7 +1012,7 @@ function openWorkout(w = null) {
   const cap = t => t[0].toUpperCase() + t.slice(1);
   openSheet(`<h2>${w ? `${w.icon} Training` : "💪 Training eintragen"}</h2>
     ${hc ? `<p class="note" style="margin-top:0">Von der Uhr über Health Connect${w.title ? ` · „${esc(w.title)}“` : ""} · ${new Date(w.start).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit", hour12: false })} Uhr · ${fmtMin(w.minutes)}. Stimmt die Sportart nicht, hier ändern.</p>` : ""}
-    ${w && w.duplicate ? `<p class="note" style="color:var(--warn)">Diese Einheit steckt schon in einer anderen (zwei Apps haben sie nach Health Connect geschrieben) und zählt deshalb nicht.</p>` : ""}
+    ${w && w.duplicate ? `<p class="note" style="color:var(--warn)">Diese Einheit steckt schon in einer anderen (zwei Apps haben sie nach Health Connect geschrieben) und zählt deshalb nicht.</p>` : coveredNote(w)}
     <label class="f"><span>Sportart</span></label>
     ${chipGroup("kind", Object.entries(T.sports).map(([k, sp]) => [k, `${sp.icon} ${esc(sp.name)}`]), kind, false, "wrap")}
     ${hc ? "" : `<label class="f mt"><span>Dauer in Minuten</span>${decField('class="big" id="t-min"', numIn.format(w ? w.minutes : 30))}</label>
