@@ -6,6 +6,8 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+## [0.29.0] – 2026-11-26
+
 ### Neu
 - **🗓 Wochenrückblick**: Montags bis mittwochs zeigt Heute eine Karte zur letzten Woche (Tage im Budget, Bilanz, Trend), bis man sie öffnet oder wegklickt; das gilt auf allen Geräten. Der Rückblick zeigt Tage im Budget, die Bilanz der Woche, Trendgewicht vorher und nachher, den Wochenstreifen (Tipp öffnet den Tag), den besten Tag, Ø Punkte im Vergleich zur Vorwoche, Ø Makros mit Richtwerten und Tipps sowie Schritte und Training. Mit ‹ › geht es zu früheren Wochen, jederzeit erreichbar über die Statistik. Urlaubstage zählen nicht mit.
 
