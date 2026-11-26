@@ -83,6 +83,42 @@ def test_copy_yesterday():
     c.__exit__(None, None, None)
 
 
+def test_copy_any_day_and_move():
+    c = client()
+    today = c.get("/api/state").json()["today"]
+    d = date.fromisoformat(today)
+    old, other = (d - timedelta(days=5)).isoformat(), (d - timedelta(days=3)).isoformat()
+    brot = food(c, "roggenvollkornbrot")
+    try:
+        c.post("/api/log", headers=H, json={"id": "m1", "food_id": brot["id"], "grams": 80, "meal": "abend", "day": old})
+        c.post("/api/log", headers=H, json={"id": "m2", "food_id": brot["id"], "grams": 40, "meal": "snack", "day": old})
+        # Tagesliste fürs Übernehmen-Fenster
+        got = c.get("/api/log", params={"day": old}).json()
+        assert got["day"] == old and {e["id"] for e in got["entries"]} >= {"m1", "m2"}
+        assert all("points" in e and "ampel" in e for e in got["entries"])
+        assert c.get("/api/log", params={"day": "kaputt"}).status_code == 400
+        # Reste vom Abend in ein anderes Mittag
+        st = c.post("/api/log/copy", headers=H, json={"from": old, "to": other, "meal": "abend", "to_meal": "mittag"}).json()
+        assert st["overview"]["day"] == other
+        assert [(e["meal"], e["grams"]) for e in st["overview"]["entries"]] == [("mittag", 80)]
+        # Ganzer Tag: Mahlzeiten bleiben, to_meal ohne meal wird ignoriert
+        c.post("/api/log/copy", headers=H, json={"from": old, "to": other, "to_meal": "mittag"})
+        meals = sorted(e["meal"] for e in c.get("/api/log", params={"day": other}).json()["entries"])
+        assert meals == ["abend", "mittag", "snack"]
+        # Nicht in die Zukunft
+        future = (d + timedelta(days=1)).isoformat()
+        assert c.post("/api/log/copy", headers=H, json={"from": old, "to": future}).status_code == 400
+        # Verschieben: gleiche id mit anderem Tag und anderer Mahlzeit
+        st = c.post("/api/log", headers=H, json={"id": "m2", "food_id": brot["id"], "grams": 40, "meal": "fruehstueck", "day": other}).json()
+        assert st["overview"]["day"] == other
+        assert "m2" not in {e["id"] for e in c.get("/api/log", params={"day": old}).json()["entries"]}
+        assert any(e["id"] == "m2" and e["meal"] == "fruehstueck" for e in st["overview"]["entries"])
+    finally:
+        with db.connect() as conn:
+            conn.execute("DELETE FROM food_log WHERE day IN (?, ?)", (old, other))
+        c.__exit__(None, None, None)
+
+
 def test_recipe_half_servings():
     c = client()
     hack = food(c, "hackfleisch", "Schwein Hackfleisch, roh")

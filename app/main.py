@@ -582,12 +582,24 @@ async def log_add(request: Request, device=Depends(auth.require)):
         return _state(conn, day if not isinstance(data, list) else None)
 
 
+@app.get("/api/log")
+def log_day(day: str, device=Depends(auth.require)):
+    """Einträge eines Tages, zum Übernehmen in einen anderen Tag."""
+    day = _day(day)
+    with db.connect() as conn:
+        return {"day": day, "entries": diary.entries(conn, day)}
+
+
 @app.post("/api/log/copy")
 async def log_copy(request: Request, device=Depends(auth.require)):
-    """Mahlzeit eines Tages (oder den ganzen Tag) auf einen anderen Tag kopieren."""
+    """Mahlzeit eines Tages (oder den ganzen Tag) auf einen anderen Tag kopieren.
+    to_meal: Einträge der Mahlzeit in eine andere Mahlzeit übernehmen (Reste vom Abend zum Mittag)."""
     data = await _json(request)
     src, dst = _day(data.get("from")), _day(data.get("to"))
+    if dst > db.today():
+        raise HTTPException(400, "Tage in der Zukunft gehen noch nicht")
     meal = data.get("meal") if data.get("meal") in diary.MEALS else None
+    to_meal = data.get("to_meal") if meal and data.get("to_meal") in diary.MEALS else None
     ids = data.get("ids")   # optional: nur diese Einträge übernehmen
     ids = {str(i) for i in ids} if isinstance(ids, list) else None
     with db.connect() as conn:
@@ -597,7 +609,7 @@ async def log_copy(request: Request, device=Depends(auth.require)):
             if ids is not None and r["id"] not in ids:
                 continue
             e = dict(r)
-            e.update(id=str(uuid.uuid4()), day=dst, ts=db.iso(db.now_utc()))
+            e.update(id=str(uuid.uuid4()), day=dst, ts=db.iso(db.now_utc()), meal=to_meal or e["meal"])
             _upsert_entry(conn, e)
         return _state(conn, dst)
 

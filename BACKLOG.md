@@ -20,7 +20,6 @@ Verglichen mit WW, Yazio, MyFitnessPal, Lose It!, FDDB, Noom, MacroFactor. Grob 
 - **Vorausplanen** (WW): bis 7 Tage voraus eintragen (heute sperrt „›“ die Zukunft). Geplante Einträge zählen sofort im Ring des Tages, gestrichelt mit „geplant“, am Tag freiwillig mit ✓ bestätigen, um Mitternacht automatisch. Abend-Check nennt offene geplante Einträge; Mittags-Erinnerung ignoriert sie; Wochenreserve, Serie, XP erst nach dem Tag; „Echter Bedarf“ nur Tage ohne offene geplante Einträge. Dazu „Passt noch“ an geplanten Tagen immer zeigen. „Was passt noch?“ ist erledigt (0.22.0).
 - **Markenprodukte in der Suche** (FDDB, Yazio): siehe Open-Food-Facts-Export unter Schritt 5. Bisher findet die Suche Markenprodukte nur, wenn sie schon einmal gescannt wurden.
 - **Wasser** (WW, Yazio, Lifesum): Gläser antippen, Tagesziel als Ring.
-- **Beliebigen Tag kopieren, Einträge verschieben** (MyFitnessPal): nicht nur „wie gestern“; falsch einsortierten Eintrag in eine andere Mahlzeit oder einen anderen Tag schieben.
 - **Schlaf aus Health Connect** (Noom, WW): Life Dashboard kann `sleep` schicken; Zusammenhang wenig Schlaf ↔ Heißhunger in der Statistik.
 - **Restaurantketten** (Yazio, FDDB): McDonald's, Burger King, Subway, Vapiano … mit veröffentlichten Nährwerten als Ergänzung zu „Auswärts“; muss gepflegt werden.
 - **Einkaufsliste aus Gerichten** (Yazio, WW): Zutaten eigener Rezepte auf eine Liste.
@@ -65,3 +64,4 @@ Commit-Angaben bis 18.11.2026 beziehen sich auf das frühere Sammel-Repo, aus de
 - **26.11.2026** Doppelte Trainings aus Health Connect ausgeblendet, Auswahl-Chips bleiben auf dem Handy einzeilig (0.27.1)
 - **26.11.2026** Stil „Sachlich“ neben „Lebendig“: Linien-Icons, ruhige Farben, Inter, kompakter Ring; Radien über CSS-Variablen, Test sichert beide Stile ab (0.28.0)
 - **26.11.2026** Wochenrückblick: Karte auf Heute (Mo–Mi), Rückblick mit Bilanz, Trend, bestem Tag, Vorwoche, Ø-Makros mit Richtwerten, Bewegung; frühere Wochen blätterbar (0.29.0)
+- **26.11.2026** Hinweis „über Schritte“ im Trainingsfenster (0.29.1); Übernehmen von beliebigem Tag und in andere Mahlzeit, Einträge verschieben und kopieren

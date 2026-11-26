@@ -6,6 +6,10 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+### Neu
+- **↺ Übernehmen von jedem Tag**: Das Fenster hinter ↺ bietet neben gestern auch Vorgestern, denselben Wochentag der Vorwoche und einen beliebigen früheren Tag. Die Quelle kann eine andere Mahlzeit sein (Reste vom Abend zum Mittag) oder der ganze Tag, dann kommt jeder Eintrag in seine Mahlzeit. Der Knopf erscheint jetzt bei jeder leeren Mahlzeit, nicht nur wenn gestern etwas da war.
+- **Einträge verschieben und kopieren**: Im Fenster eines Eintrags gibt es ein Feld „Tag“. Mahlzeit oder Tag ändern und speichern verschiebt den Eintrag, „Kopieren“ trägt ihn zusätzlich dort ein. Tage in der Zukunft gehen nicht.
+
 ## [0.29.1] – 2026-11-26
 
 ### Geändert

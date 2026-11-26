@@ -619,43 +619,85 @@ function prevHtml(key) {
   return `<div class="empty-line" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Gestern: ${esc(what)}</div>`;
 }
 
-// Fenster „Wie gestern“: Einträge vom Vortag ansehen, einzelne rausnehmen, Rest übernehmen
+// Fenster „Übernehmen“: Einträge eines früheren Tages ansehen, einzelne rausnehmen, Rest in diese Mahlzeit übernehmen.
+// Standard ist gestern, gleiche Mahlzeit. „Ganzer Tag“ übernimmt alle Mahlzeiten an ihren Platz.
 function openCopy(meal) {
-  const p = (S.overview.prev || {})[meal]; if (!p || !p.count) return;
-  const items = p.items || [];
-  const keep = new Set(items.map(it => it.id));
-  openSheet(`<h2>↺ ${esc(MEAL_LABEL[meal])} wie gestern</h2>
-    <p class="note" style="margin-top:0">Was du nicht nochmal willst, mit ✕ rausnehmen. Der Eintrag von gestern bleibt dabei erhalten.</p>
-    <ul class="list" id="cp-items"></ul>
+  const o = S.overview;
+  const prevItems = Object.entries(o.prev || {}).flatMap(([m, p]) => (p.items || []).map(it => ({ ...it, meal: m })));
+  const cache = { [o.prev_day]: prevItems };
+  const quick = [[o.prev_day, "Gestern"], [addDays(o.day, -2), "Vorgestern"], [addDays(o.day, -7), `Letzten ${fmtDay(addDays(o.day, -7), { weekday: "short" }).replace(".", "")}`]];
+  let from = o.prev_day, src = meal, keep = new Set(), items = [], seq = 0;
+  openSheet(`<h2>↺ In ${esc(MEAL_LABEL[meal])} übernehmen</h2>
+    ${chipGroup("cpd", quick, from)}
+    <label class="f mt"><span>Von Tag</span><input type="date" id="cp-day" value="${from}" max="${addDays(o.day, -1)}"></label>
+    ${chipGroup("cpm", [...MEALS.map(([k, l, i]) => [k, `${i} ${l}`]), ["all", "Ganzer Tag"]], src, false, "scroll mt")}
+    <ul class="list mt" id="cp-items"></ul>
+    <p class="note" id="cp-note"></p>
     <div class="row nowrap mt"><button class="btn" id="cp-cancel">Abbrechen</button><button class="btn primary grow" id="cp-save"></button></div>`, root => {
     const draw = () => {
+      const all = src === "all";
+      if (items === null) {
+        $("#cp-items", root).innerHTML = `<li><div class="bd muted">Lade …</div></li>`;
+        $("#cp-save", root).disabled = true;
+        return;
+      }
       const sel = items.filter(it => keep.has(it.id));
-      $("#cp-items", root).innerHTML = sel.length ? sel.map(it => `<li><span class="dot ${it.ampel || "green"}"></span>
-        <div class="bd"><b>${esc(it.name)}</b><div class="meta">${it.portion ? esc(it.portion) + " · " : ""}${fmtG(it.grams || 0)}</div></div>
+      $("#cp-items", root).innerHTML = !items.length ? `<li><div class="bd muted">${all ? "An diesem Tag" : `Bei ${esc(MEAL_LABEL[src])}`} nichts erfasst.</div></li>`
+        : sel.length ? sel.map(it => `<li><span class="dot ${it.ampel || "green"}"></span>
+        <div class="bd"><b>${esc(it.name)}</b><div class="meta">${all ? esc(MEAL_LABEL[it.meal]) + " · " : ""}${it.portion ? esc(it.portion) + " · " : ""}${fmtG(it.grams || 0)}</div></div>
         <span class="val">${fmtVal(it.points, it.kcal || 0)}</span>
         <button class="btn icon small-icon" data-rm="${esc(it.id)}" aria-label="Rausnehmen">✕</button></li>`).join("")
         : `<li><div class="bd muted">Nichts mehr ausgewählt.</div></li>`;
+      $("#cp-note", root).textContent = all ? "Jeder Eintrag kommt in seine Mahlzeit. Mit ✕ rausnehmen, was du nicht nochmal willst."
+        : `Kommt in ${MEAL_LABEL[meal]}. Mit ✕ rausnehmen, was du nicht nochmal willst. Der ursprüngliche Eintrag bleibt.`;
       const pts = sel.reduce((a, it) => a + it.points, 0), kcal = sel.reduce((a, it) => a + (it.kcal || 0), 0);
       const btn = $("#cp-save", root);
       btn.disabled = !sel.length;
       btn.textContent = sel.length ? `${sel.length === items.length ? "Alles" : sel.length} übernehmen · ${fmtVal(pts, kcal)}` : "Übernehmen";
     };
+    const load = async () => {
+      const my = ++seq;
+      $$('[data-group="cpd"] .chip', root).forEach(c => c.classList.toggle("on", c.dataset.val === from));
+      if (!cache[from]) {
+        items = null; draw();
+        try { cache[from] = (await api(`/api/log?day=${from}`)).entries; }
+        catch (e) { if (my === seq) { items = []; draw(); toast("Offline – nur gestern verfügbar"); } return; }
+        if (my !== seq) return;
+      }
+      items = cache[from].filter(it => src === "all" || it.meal === src);
+      keep = new Set(items.map(it => it.id));
+      draw();
+    };
+    bindChips(root, g => {
+      if (g === "cpd") { from = chipVal(root, "cpd"); $("#cp-day", root).value = from; }
+      if (g === "cpm") src = chipVal(root, "cpm");
+      load();
+    });
+    $("#cp-day", root).onchange = e => {
+      const d = e.target.value;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(d) && d < o.day) { from = d; load(); }
+    };
     $("#cp-items", root).onclick = e => { const b = e.target.closest("[data-rm]"); if (b) { keep.delete(b.dataset.rm); draw(); } };
     $("#cp-cancel", root).onclick = closeSheet;
-    $("#cp-save", root).onclick = () => { closeSheet(); copyMeal(meal, keep.size < items.length ? [...keep] : null); };
-    draw();
+    $("#cp-save", root).onclick = () => {
+      closeSheet();
+      copyMeal(meal, { from, src, ids: keep.size < items.length ? [...keep] : null });
+    };
+    load();
   });
 }
 
-async function copyMeal(meal, ids = null) {
+async function copyMeal(meal, { from, src, ids }) {
   const o = S.overview, before = new Set(o.entries.map(e => e.id));
-  const body = { from: o.prev_day, to: o.day, meal };
+  const body = { from, to: o.day };
+  if (src !== "all") Object.assign(body, { meal: src, to_meal: meal });
   if (ids) body.ids = ids;
   try { S = await api("/api/log/copy", { method: "POST", body }); }
   catch (e) { return toast(e.message); }
   const added = S.overview.entries.filter(e => !before.has(e.id)).map(e => e.id);
+  const when = from === o.prev_day ? "gestern" : fmtDay(from);
   vibrate(30); lists = null; viewToday();
-  toast(`${MEAL_LABEL[meal]} wie gestern übernommen`, 6000, [{ label: "Rückgängig", fn: async () => {
+  toast(src === "all" ? `Einträge von ${when} übernommen` : `${MEAL_LABEL[src]} von ${when} übernommen`, 6000, [{ label: "Rückgängig", fn: async () => {
     for (const id of added) { try { await deleteEntry(id); } catch (_) { /* weiter */ } }
     viewToday();
   } }]);
@@ -754,11 +796,11 @@ async function deleteTemplate(t) {
 function mealHtml(key, label, icon) {
   const list = S.overview.entries.filter(e => e.meal === key);
   const sumP = list.reduce((a, e) => a + e.points, 0), sumK = list.reduce((a, e) => a + (e.kcal || 0), 0);
-  const prev = (S.overview.prev || {})[key], canCopy = !list.length && prev && prev.count;
+  const canCopy = !list.length;
   const tpls = list.length ? [] : (S.templates || []).filter(t => t.meal === key).slice(0, 3);
   return `<div class="card meal"><div class="card-head"><h2>${icon} ${label}</h2>
       <div class="row nowrap"><span class="sum">${list.length ? fmtVal(sumP, sumK) : ""}</span>
-      ${canCopy ? `<button class="btn icon small-icon" data-copy="${key}" aria-label="${label} wie gestern" title="Wie gestern">↺</button>` : ""}
+      ${canCopy ? `<button class="btn icon small-icon" data-copy="${key}" aria-label="${label} von einem anderen Tag übernehmen" title="Von einem anderen Tag übernehmen">↺</button>` : ""}
       ${list.length ? `<button class="btn icon small-icon" data-keep="${key}" aria-label="${label} als Mahlzeit merken" title="Als Mahlzeit merken">☆</button>` : ""}
       <button class="btn icon small-icon" data-add="${key}" aria-label="${label} erfassen">+</button></div></div>
     ${list.length ? `<ul class="list">${list.map(e => `<li class="tap" data-entry="${esc(e.id)}"><span class="dot ${e.ampel}"></span>
@@ -1473,9 +1515,11 @@ function openAmount(food, meal, entry = null, back = null) {
       <label class="grow" style="display:block">${decField('class="big" id="grams"', numIn.format(grams))}</label>
       <span class="muted">g</span></div>
     ${chipGroup("meal", MEALS.map(([k, l, i]) => [k, `${i} ${l}`]), entry ? entry.meal : meal, false, "scroll mt")}
+    ${entry ? `<label class="f mt"><span>Tag</span><input type="date" id="e-day" value="${entry.day}" max="${S.today}"></label>` : ""}
     <div class="why" id="why"></div>
     ${food.source === "eatout" ? `<p class="note">Restaurant-Portionen sind oft größer und fetter als gedacht. Im Zweifel die größere Portion nehmen.</p>` : ""}
-    <div class="row nowrap mt">${entry ? `<button class="btn danger" id="del">Löschen</button>` : ""}<button class="btn primary grow" id="save">${entry ? "Speichern" : "Erfassen"}</button></div>
+    <div class="row nowrap mt">${entry ? `<button class="btn danger" id="del">Löschen</button><button class="btn" id="dup">Kopieren</button>` : ""}<button class="btn primary grow" id="save">${entry ? "Speichern" : "Erfassen"}</button></div>
+    ${entry ? `<p class="note">Mahlzeit oder Tag ändern und speichern verschiebt den Eintrag. „Kopieren“ trägt ihn zusätzlich dort ein.</p>` : ""}
     <details class="more mt"><summary>Mehr zu diesem Lebensmittel</summary>
       <label class="switch"><span>Zählt 0 Punkte</span><input type="checkbox" id="zero" ${food.zero ? "checked" : ""}></label>
       <div class="row nowrap"><input type="text" id="pname" placeholder="Eigene Portion, z. B. „Mein Becher“" class="grow"><button class="btn small" id="psave">Portion merken</button></div>
@@ -1522,15 +1566,37 @@ function openAmount(food, meal, entry = null, back = null) {
     $("#minus", root).onclick = () => { const p = portions.find(x => x.name === portion); if (p) setPortion(p, count - 0.5); };
     $("#plus", root).onclick = () => { const p = portions.find(x => x.name === portion); if (p) setPortion(p, count + 0.5); };
     gi.oninput = () => { if (portion) { portion = null; $("#stepper", root).hidden = true; markPortion(); } update(); };
+    const target = () => {   // Tag aus dem Feld, nie in der Zukunft
+      const d = $("#e-day", root) && $("#e-day", root).value;
+      return d && /^\d{4}-\d{2}-\d{2}$/.test(d) && d <= S.today ? d : (entry ? entry.day : (curDay || S.today));
+    };
+    const label = () => portion ? (count !== 1 ? `${num1.format(count)}× ${portion}` : portion) : null;
     $("#save", root).onclick = async () => {
-      const label = portion ? (count !== 1 ? `${num1.format(count)}× ${portion}` : portion) : null;
-      const e = { id: entry ? entry.id : uuid(), food_id: food.id, grams, portion: label, meal: chipVal(root, "meal") || meal, day: entry ? entry.day : (curDay || S.today) };
+      const e = { id: entry ? entry.id : uuid(), food_id: food.id, grams, portion: label(), meal: chipVal(root, "meal") || meal, day: target() };
       if (!(await saveEntry(e))) return;
       vibrate(30); lists = null;
-      closeSheet(); viewToday();
-      toast(entry ? "Gespeichert" : `${shortName(food.name)} erfasst`);
+      closeSheet();
+      if (entry && e.day !== entry.day) {
+        await shownDayAgain(); viewToday();
+        toast(`Auf ${fmtDay(e.day)} · ${MEAL_LABEL[e.meal]} verschoben`, 6000, [{ label: "Anzeigen", fn: () => goDay(e.day) }]);
+      } else {
+        viewToday();
+        toast(!entry ? `${shortName(food.name)} erfasst` : e.meal !== entry.meal ? `Nach ${MEAL_LABEL[e.meal]} verschoben` : "Gespeichert");
+      }
       if (back) back();
     };
+    $("#dup", root) && ($("#dup", root).onclick = async () => {
+      const e = { id: uuid(), food_id: food.id, grams, portion: label(), meal: chipVal(root, "meal") || meal, day: target() };
+      if (!(await saveEntry(e))) return;
+      vibrate(30); lists = null;
+      closeSheet();
+      if (e.day !== entry.day) await shownDayAgain();
+      viewToday();
+      toast(`Kopie in ${MEAL_LABEL[e.meal]}${e.day !== entry.day ? ` am ${fmtDay(e.day)}` : ""}`, 6000, [{ label: "Rückgängig", fn: async () => {
+        try { await deleteEntry(e.id); } catch (_) { /* weiter */ }
+        await shownDayAgain(); viewToday();
+      } }]);
+    });
     $("#del", root) && ($("#del", root).onclick = async () => {
       try { await deleteEntry(entry.id); } catch (err) { return toast(err.message); }
       closeSheet(); viewToday();
@@ -1559,6 +1625,11 @@ function openAmount(food, meal, entry = null, back = null) {
       try { openRecipe(await api(`/api/recipes/${food.id}`), chipVal(root, "meal") || meal); } catch (e) { toast(e.message); }
     });
   });
+}
+
+// Nach dem Speichern auf einem anderen Tag liefert der Server diesen Tag; die Anzeige bleibt beim bisherigen
+async function shownDayAgain() {
+  try { await loadState(); } catch (_) { /* offline: Stand vom Server bleibt */ }
 }
 
 async function openEntry(e) {
