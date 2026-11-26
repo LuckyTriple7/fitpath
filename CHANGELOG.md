@@ -6,6 +6,8 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+## [0.28.0] – 2026-11-26
+
 ### Neu
 - **Stil „Sachlich“** (Mehr → Anzeige → Stil, je Gerät): einfarbige Linien-Icons statt bunter Emojis, kühle Grautöne mit Blau als Akzent, kleinere Ecken ohne Schatten und Verläufe, Auswahl als Segment-Schalter, Schrift Inter. Auf Heute steht neben einem kleineren Ring die Zahlenliste Budget, Aktivität und Reserve. Hell und Dunkel gibt es in beiden Stilen; der bisherige Stil heißt jetzt „Lebendig“ und bleibt Standard. Icons (Lucide) und Schrift werden mitgeliefert und sind offline verfügbar.
 
