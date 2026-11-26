@@ -6,6 +6,8 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+## [0.27.1] – 2026-11-26
+
 ### Geändert
 - Doppelt gemeldete Trainingseinheiten (zwei Apps schreiben dieselbe Einheit nach Health Connect) erscheinen in der Karte „Schritte“ nicht mehr, sie zählten ohnehin nicht.
 - Auswahl-Chips (Wochentage bei Refeed und Wiegen, Intensität, Anzeige, Tempo usw.) bleiben auf schmalen Handys in einer Zeile: Rand und Schrift werden kleiner statt umzubrechen. Nur lange Listen wie die Sportarten brechen weiter um.

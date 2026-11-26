@@ -1,4 +1,4 @@
 """FitPath."""
 
 # Einzige Stelle für die Version (SemVer). Ein Release setzt sie mit tools/release.py.
-__version__ = "0.27.0"
+__version__ = "0.27.1"
