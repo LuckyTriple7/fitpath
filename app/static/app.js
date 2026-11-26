@@ -216,7 +216,9 @@ window.addEventListener("popstate", e => {
 });
 $("#sheet").addEventListener("click", e => { if (e.target.closest("[data-close]")) closeSheet(); });
 
+// Chips bleiben einzeilig (fit, Schrift verkleinert fitChips); "scroll" wischt seitlich, "wrap" bricht bei langen Listen um
 function chipGroup(name, items, selected, multi = false, cls = "") {
+  if (!/\b(scroll|wrap)\b/.test(cls)) cls += " fit";
   return `<div class="chips ${cls}" data-group="${name}" data-multi="${multi ? 1 : 0}">` + items.map(([val, label]) =>
     `<button type="button" class="chip${(multi ? (selected || []).map(String).includes(String(val)) : String(selected) === String(val)) ? " on" : ""}" data-val="${esc(val)}">${label}</button>`
   ).join("") + "</div>";
@@ -226,6 +228,7 @@ function bindChips(root, onChange) {
     const b = e.target.closest(".chip"); if (!b) return;
     if (g.dataset.multi === "1") b.classList.toggle("on");
     else { $$(".chip", g).forEach(c => c.classList.remove("on")); b.classList.add("on"); }
+    queueFit();                                          // fett gesetzter Chip ist breiter
     onChange && onChange(g.dataset.group, chipVal(root, g.dataset.group));
   }));
 }
@@ -852,7 +855,7 @@ function activityHtml() {
   const steps = a && a.steps ? a.steps : 0;
   const src = !a || !a.source ? "Tippen zum Eintragen – oder Health Connect unter Mehr verbinden" :
     a.source === "hc" ? `Health Connect · ${fmtAgo(a.updated)}` : "von Hand eingetragen";
-  const ws = (a && a.workouts) || [];
+  const ws = ((a && a.workouts) || []).filter(w => !w.duplicate);   // doppelt gemeldete Einheiten zählen nicht, also auch nicht zeigen
   return `<div class="card" id="act-card" style="cursor:pointer"><div class="card-head"><h2>👟 ${num.format(steps)} Schritte</h2>
     <small>${a && a.act_points ? `+${isPoints() ? a.act_points + " P" : a.act_kcal + " kcal"}` : `Ziel ${num.format(goal)}`}</small></div>
     <div class="progress${steps >= goal ? " good" : ""}"><i style="width:${Math.min(steps / goal, 1) * 100}%"></i></div>
@@ -861,7 +864,7 @@ function activityHtml() {
       <div class="bd"><b>${esc(w.name)}</b><div class="meta">${fmtMin(w.minutes)} · ${esc(w.intensity)}${w.source === "hc" ? " · ⌚ Uhr" : ""}</div></div>
       <span class="val">${workoutVal(w)}</span></li>`).join("")}</ul>` : ""}
     ${a && a.train_capped ? `<p class="note">Tagesgrenze von ${S.training.max_points_day} Trainingspunkten erreicht.</p>` : ""}
-    <button class="btn small block mt" id="train-add">＋ Training</button></div>`;
+    <button class="btn small block mt" id="train-add">+ Training</button></div>`;
 }
 function fmtMin(m) {
   m = Math.round(m);
@@ -896,7 +899,7 @@ function openWorkout(w = null) {
     ${hc ? `<p class="note" style="margin-top:0">Von der Uhr über Health Connect${w.title ? ` · „${esc(w.title)}“` : ""} · ${new Date(w.start).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit", hour12: false })} Uhr · ${fmtMin(w.minutes)}. Stimmt die Sportart nicht, hier ändern.</p>` : ""}
     ${w && w.duplicate ? `<p class="note" style="color:var(--warn)">Diese Einheit steckt schon in einer anderen (zwei Apps haben sie nach Health Connect geschrieben) und zählt deshalb nicht.</p>` : ""}
     <label class="f"><span>Sportart</span></label>
-    ${chipGroup("kind", Object.entries(T.sports).map(([k, sp]) => [k, `${sp.icon} ${esc(sp.name)}`]), kind)}
+    ${chipGroup("kind", Object.entries(T.sports).map(([k, sp]) => [k, `${sp.icon} ${esc(sp.name)}`]), kind, false, "wrap")}
     ${hc ? "" : `<label class="f mt"><span>Dauer in Minuten</span>${decField('class="big" id="t-min"', numIn.format(w ? w.minutes : 30))}</label>
       ${chipGroup("quick", [15, 30, 45, 60, 90].map(m => [m, `${m} min`]), w ? null : 30)}`}
     <label class="f mt"><span>Intensität</span></label>
@@ -1100,7 +1103,7 @@ function openSOS() {
   };
   openSheet(`<h2>🍫 Heißhunger</h2>
     <p class="muted">Was ist gerade los?</p>
-    ${chipGroup("trig", triggers.map(t => [t, esc(t)]), null)}
+    ${chipGroup("trig", triggers.map(t => [t, esc(t)]), null, false, "wrap")}
     <label class="f"><span>Wie stark? <b id="int-v">${intensity}</b> von 10</span><input type="range" min="1" max="10" value="${intensity}" id="int"></label>
     <div id="sos-plan"></div>
     <div id="sos-food"></div>
@@ -2050,7 +2053,7 @@ function openSteps() {
 function openWeigh() {
   const last = S.body && S.body.weight;
   openSheet(`<h2>⚖️ Eintragen</h2>
-    ${chipGroup("kind", [["weight", "Gewicht"], ["fat", "Körperfett %"], ["waist", "Bauchumfang cm"]], "weight")}
+    ${chipGroup("kind", [["weight", "Gewicht"], ["fat", "Körperfett"], ["waist", "Bauchumfang"]], "weight")}
     <label class="f"><span id="w-label">Gewicht in kg</span>${decField('class="big" id="w-val"', last ? numIn.format(last) : "")}</label>
     <label class="f"><span>Tag</span><select id="w-day">${Array.from({ length: 14 }, (_, i) => addDays(S.today, -i)).map((d, i) =>
       `<option value="${d}">${i === 0 ? "Heute" : i === 1 ? "Gestern" : fmtDay(d, { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" })}</option>`).join("")}</select></label>
@@ -2167,7 +2170,7 @@ async function viewStats() {
 
 function trainingStatsHtml(t, days, P) {
   const head = `<div class="card-head"><h2>💪 Training</h2><small>im Zeitraum</small></div>`;
-  if (!t || !t.sports.length) return `<div class="card">${head}<div class="empty">Noch kein Training im Zeitraum. Auf Heute in der Karte „Schritte“ über ＋ Training eintragen, Einheiten von der Uhr kommen über Health Connect.</div></div>`;
+  if (!t || !t.sports.length) return `<div class="card">${head}<div class="empty">Noch kein Training im Zeitraum. Auf Heute in der Karte „Schritte“ über + Training eintragen, Einheiten von der Uhr kommen über Health Connect.</div></div>`;
   const min = S.training ? S.training.train_day_minutes : 20;
   return `<div class="card">${head}
     <div class="tiles three"><div class="tile"><div class="v">${t.days}</div><div class="l">Trainingstage</div></div>
@@ -2366,7 +2369,7 @@ function bindPlanCard() {
 }
 
 async function saveRefeed(days) {
-  const chips = () => $$('[data-group="refeed"] .chip').forEach(c => c.classList.toggle("on", S.plan.refeed_days.map(String).includes(c.dataset.val)));
+  const chips = () => { $$('[data-group="refeed"] .chip').forEach(c => c.classList.toggle("on", S.plan.refeed_days.map(String).includes(c.dataset.val))); queueFit(); };
   if (days.length > 2) { toast("Höchstens 2 Refeed-Tage"); return chips(); }
   try { S = await api("/api/settings", { method: "PUT", body: { refeed_days: days } }); }
   catch (e) { toast(e.message); return chips(); }
@@ -2761,6 +2764,25 @@ function fitButtons() {
     b.style.fontSize = size + "px";
     while (b.scrollWidth > b.clientWidth && size > base * FIT_MIN) { size = Math.max(base * FIT_MIN, size - 0.5); b.style.fontSize = size + "px"; }
     if (b.scrollWidth > b.clientWidth) { b.classList.remove("fit"); b.style.fontSize = ""; }
+  }
+  fitChips();
+}
+// Einzeilige Chip-Gruppen: alle Chips einer Gruppe gleich weit verkleinern; reicht das nicht, doch umbrechen
+function fitChips() {
+  const over = c => c.scrollWidth > c.clientWidth + 0.5;
+  for (const g of document.querySelectorAll(".chips.fit")) {
+    if (!g.offsetParent) continue;
+    const cs = [...g.children];
+    g.classList.remove("wrapped");
+    cs.forEach(c => (c.style.fontSize = ""));
+    if (!cs.length || !cs.some(over)) continue;
+    const base = parseFloat(getComputedStyle(cs[0]).fontSize);
+    let size = base;
+    while (cs.some(over) && size > base * FIT_MIN) {
+      size = Math.max(base * FIT_MIN, size - 0.5);
+      cs.forEach(c => (c.style.fontSize = size + "px"));
+    }
+    if (cs.some(over)) { cs.forEach(c => (c.style.fontSize = "")); g.classList.add("wrapped"); }
   }
 }
 let fitQueued = false;

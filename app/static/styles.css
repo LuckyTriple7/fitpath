@@ -149,6 +149,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chips.scroll { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
 .chips.scroll::-webkit-scrollbar { display: none; }
+/* fit: einzeilig, Chips schrumpfen (schmaler Rand, kleinere Schrift über fitChips in app.js); .wrapped = passt auch so nicht */
+.chips.fit { flex-wrap: nowrap; gap: min(8px, 1.6vw); }
+.chips.fit.wrapped { flex-wrap: wrap; }
+.chips.fit > .chip { flex: 0 1 auto; min-width: 0; overflow: hidden; padding-inline: min(14px, 2.2vw); text-align: center; }
 .chip {
   border: 1px solid var(--line); background: var(--card-2); border-radius: 99px;
   padding: 8px 14px; min-height: 40px; cursor: pointer; font-size: .95rem; white-space: nowrap; flex: none;
