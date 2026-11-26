@@ -14,7 +14,7 @@ import httpx2
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 
-from . import __version__, adaptive, ai, auth, eatout, backup, body, db, diary, foods, ingest, meals, motivation, plan, points, push, recipe_import, swaps, training
+from . import __version__, adaptive, ai, auth, eatout, backup, body, db, diary, foods, ingest, meals, motivation, plan, points, push, recipe_import, review, swaps, training
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 MAX_INGEST_BYTES = 12 * 1024 * 1024
@@ -243,6 +243,7 @@ VALIDATORS = {
     "evening_time": lambda v: _clean_time(v) if v else "",
     "snack_push": bool,
     "craving_triggers": lambda v: [t for t in dict.fromkeys(_clean_text(x, 40) for x in list(v)[:20]) if t],
+    "review_seen": lambda v: db.parse_day(str(v)).isoformat(),      # Wochenrückblick: Montag der gesehenen Woche
     "plans": lambda v: {_clean_text(k, 40): _clean_text(t, 200) for k, t in list(dict(v).items())[:20]
                         if _clean_text(k, 40) and _clean_text(t, 200)},
 }
@@ -291,6 +292,7 @@ def _state(conn, day: str | None = None) -> dict:
         "today": db.today(),
         "overview": (ov := diary.overview(conn, s, day)),
         "plan": plan.info(s, ov["budget"], db.parse_day(db.today())),
+        "week_review": review.teaser(conn, s),
         "motivation": motivation.state(conn, s),
         "body": body.summary(conn, s),
         "recent": foods.recent(conn, 12),
@@ -771,6 +773,17 @@ def stats(days: int = 30, device=Depends(auth.require)):
         d["cravings"] = motivation.craving_stats(conn, d["days"][0]["day"])
         d["adaptive"] = adaptive.estimate(conn, s)
         return d
+
+
+@app.get("/api/review/week")
+def review_week(start: str | None = None, device=Depends(auth.require)):
+    """Wochenrückblick; ohne start die letzte abgeschlossene Woche. Die laufende Woche geht auch (Zwischenstand)."""
+    today = db.parse_day(db.today())
+    first = db.parse_day(_day(start)) if start else review.last_monday(today)
+    if first > today:
+        raise HTTPException(400, "Woche liegt in der Zukunft")
+    with db.connect() as conn:
+        return review.week(conn, db.get_settings(conn), first)
 
 
 # ---------- Motivation: Heißhunger und Challenge ----------

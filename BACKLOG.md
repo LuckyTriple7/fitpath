@@ -7,7 +7,7 @@ Doku: [README.md](README.md)
 ### Schritt 4 – KI
 - Coach mit Allowlist (Budget, Trend, Schritte, Top-Snack-Zeiten; nie Notizen).
 - Foto → Schätzung (nur mit Schalter, Standard aus).
-- Wochenrückblick.
+- Wochenrückblick mit KI-Kommentar (der Rückblick selbst ist seit 0.29.0 da).
 
 ### Schritt 5 – Anbindungen
 - Home-Assistant-Sensoren (Punkte übrig, Trendgewicht, Streak) über Token-Endpunkt.
@@ -21,7 +21,6 @@ Verglichen mit WW, Yazio, MyFitnessPal, Lose It!, FDDB, Noom, MacroFactor. Grob 
 - **Markenprodukte in der Suche** (FDDB, Yazio): siehe Open-Food-Facts-Export unter Schritt 5. Bisher findet die Suche Markenprodukte nur, wenn sie schon einmal gescannt wurden.
 - **Wasser** (WW, Yazio, Lifesum): Gläser antippen, Tagesziel als Ring.
 - **Beliebigen Tag kopieren, Einträge verschieben** (MyFitnessPal): nicht nur „wie gestern“; falsch einsortierten Eintrag in eine andere Mahlzeit oder einen anderen Tag schieben.
-- **Wochenrückblick** (WW Weekly Check-in): montags Karte mit Punkten, Trend, Training, bestem Tag; siehe auch Schritt 4 und 5.
 - **Schlaf aus Health Connect** (Noom, WW): Life Dashboard kann `sleep` schicken; Zusammenhang wenig Schlaf ↔ Heißhunger in der Statistik.
 - **Restaurantketten** (Yazio, FDDB): McDonald's, Burger King, Subway, Vapiano … mit veröffentlichten Nährwerten als Ergänzung zu „Auswärts“; muss gepflegt werden.
 - **Einkaufsliste aus Gerichten** (Yazio, WW): Zutaten eigener Rezepte auf eine Liste.
@@ -33,7 +32,6 @@ Verglichen mit WW, Yazio, MyFitnessPal, Lose It!, FDDB, Noom, MacroFactor. Grob 
 - Wasser trinken zählen (siehe oben).
 - Receive/Writeback von Life Dashboard: Gewicht aus FitPath nach Health Connect zurückschreiben.
 - **Tagesrückblick ausbauen** (nach 0.27.0):
-  - Wochenansicht: Ø-Makros und Richtwerte über 7 Tage statt nur eines Tages.
   - „Was fehlt?“ mit eigenen Lebensmitteln: statt fester Beispiele (Skyr, Linsen …) eiweiß- oder ballaststoffreiche Sachen vorschlagen, die man schon gegessen hat und die in die übrigen Punkte passen (wie „Passt noch“).
   - Wasser als weitere Zeile bei den Richtwerten (hängt an „Wasser“ oben).
   - Uhrzeit-Verteilung: wann am Tag die kcal anfallen, um Abend-Snacks sichtbar zu machen.
@@ -63,4 +61,7 @@ Commit-Angaben bis 18.11.2026 beziehen sich auf das frühere Sammel-Repo, aus de
 - **20.11.2026** Gespeicherte Mahlzeiten („Mein Frühstück“ mit einem Tipp), Prognose fürs Zielgewicht (0.21.0)
 - **20.11.2026** „💡 Passt noch“: Vorschläge aus eigenen Sachen, die in die übrigen Punkte passen
 - **25.11.2026** Doppelte Gewichte aus Health Connect (mehrere Apps) nur einmal (0.25.1); Refeed-Tage, Urlaub und Diätpause mit Budget je Tag
-- **25.11.2026** Tagesrückblick auf Heute: Makro-Ring, Balken je Mahlzeit, Richtwerte, „Was fehlt?“
+- **25.11.2026** Tagesrückblick auf Heute: Makro-Ring, Balken je Mahlzeit, Richtwerte, „Was fehlt?“ (0.27.0)
+- **26.11.2026** Doppelte Trainings aus Health Connect ausgeblendet, Auswahl-Chips bleiben auf dem Handy einzeilig (0.27.1)
+- **26.11.2026** Stil „Sachlich“ neben „Lebendig“: Linien-Icons, ruhige Farben, Inter, kompakter Ring; Radien über CSS-Variablen, Test sichert beide Stile ab (0.28.0)
+- **26.11.2026** Wochenrückblick: Karte auf Heute (Mo–Mi), Rückblick mit Bilanz, Trend, bestem Tag, Vorwoche, Ø-Makros mit Richtwerten, Bewegung; frühere Wochen blätterbar (0.29.0)

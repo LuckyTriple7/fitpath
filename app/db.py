@@ -188,6 +188,7 @@ DEFAULTS = {
         "Süßes gesehen": "Aus dem Blick räumen und 10 Minuten warten",
     },
     "unlocked": {},
+    "review_seen": "",          # Montag der Woche, deren Rückblick schon geöffnet oder weggeklickt wurde
     "challenges_done": [],
     "challenge_skips": {},
 }

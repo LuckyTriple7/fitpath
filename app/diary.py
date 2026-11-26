@@ -22,17 +22,17 @@ def entries(conn, day: str) -> list:
 
 
 def totals(conn, first: str, last: str) -> dict:
-    """{Tag: {points, kcal, protein, fat, satfat, carbs, sugar, fiber, alcohol, entries, kcal_green/yellow/red}}"""
+    """{Tag: {points, kcal, protein, fat, satfat, carbs, sugar, fiber, alcohol, salt, entries, kcal_green/yellow/red}}"""
     out = {}
     for r in conn.execute("SELECT * FROM food_log WHERE day BETWEEN ? AND ?", (first, last)):
         e = entry_out(r)
         t = out.setdefault(e["day"], {"points": 0, "entries": 0, "kcal": 0.0, "protein": 0.0, "fat": 0.0, "satfat": 0.0,
-                                      "carbs": 0.0, "sugar": 0.0, "fiber": 0.0, "alcohol": 0.0,
+                                      "carbs": 0.0, "sugar": 0.0, "fiber": 0.0, "alcohol": 0.0, "salt": 0.0,
                                       "kcal_green": 0.0, "kcal_yellow": 0.0, "kcal_red": 0.0, "meals": set()})
         t["points"] += e["points"]
         t["entries"] += 1
         t["meals"].add(e["meal"])
-        for k in ("kcal", "protein", "fat", "satfat", "carbs", "sugar", "fiber", "alcohol"):
+        for k in ("kcal", "protein", "fat", "satfat", "carbs", "sugar", "fiber", "alcohol", "salt"):
             t[k] += float(e.get(k) or 0)
         t["kcal_" + e["ampel"]] += float(e.get("kcal") or 0)
     for t in out.values():

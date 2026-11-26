@@ -494,6 +494,7 @@ function viewToday() {
       }).join("")}</div>
       ${planWeekNote(o)}
     </div>
+    ${isToday ? weekTeaserHtml() : ""}
     ${planHtml(o, isToday)}
     ${challengeHtml()}
     ${levelHtml()}
@@ -509,6 +510,7 @@ function viewToday() {
   ring.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleDisplay(); } };
   $("#prev").onclick = () => goDay(addDays(o.day, -1));
   $("#next").onclick = () => !isToday && goDay(addDays(o.day, 1));
+  bindWeekTeaser();
   $("#week").onclick = e => { const d = e.target.closest("[data-day]"); if (d && d.dataset.day <= S.today) goDay(d.dataset.day); };
   $$("[data-add]").forEach(bt => (bt.onclick = () => openAdd(bt.dataset.add)));
   $$("[data-entry]").forEach(li => (li.onclick = () => {
@@ -833,27 +835,123 @@ function reviewTips(s, prot, satMax, isToday) {
 function reviewHtml() {
   const o = S.overview, list = o.entries;
   if (!list.length) return "";
-  const s = daySums(list), parts = macroKcal(s), sum = parts.reduce((a, p) => a + p.kcal, 0) || 1;
+  const s = daySums(list);
   const prot = Math.round((o.budget.weight || 70) * 1.0);
   const target = (o.plan && o.plan.target) || o.budget.target;
   const satMax = Math.round(target * .1 / 9);
   const tips = reviewTips(s, prot, satMax, o.day === S.today);
   const open = store("fp_review_open");
   return `<details class="card review" id="review"${open === false ? "" : " open"}><summary class="card-head"><h2>📊 Tagesrückblick</h2><small>${list.length} ${list.length === 1 ? "Eintrag" : "Einträge"}</small></summary>
-    <div class="macro">${donutSvg(parts, s.kcal)}
-      <ul class="mlegend">${parts.filter(p => p.k !== "alcohol" || p.g > 0).map(p => `<li><i style="background:var(--m-${p.k})"></i><span>${p.label}</span>
-        <b>${num.format(Math.round(p.g))} g</b><small>${Math.round(p.kcal / sum * 100)} %</small></li>`).join("")}</ul></div>
-    <p class="note">Anteil an der Energie. Grob gut: Eiweiß 20–30 %, Fett 25–35 %, Kohlenhydrate 40–55 %.</p>
+    ${macroHtml(s)}
     <h3>Je Mahlzeit</h3>${mealBars(list)}
     <h3>Richtwerte</h3>
-    ${limitBar("Eiweiß", s.protein, prot, "min", "1 g je kg Körpergewicht", "var(--m-protein)")}
+    ${targetBars(s, prot, satMax)}
+    <h3>💡 Was fehlt?</h3>
+    ${tipsHtml(tips)}
+  </details>`;
+}
+// Makro-Ring mit Legende (Tages- und Wochenrückblick); s = Gramm je Nährstoff
+function macroHtml(s) {
+  const parts = macroKcal(s), sum = parts.reduce((a, p) => a + p.kcal, 0) || 1;
+  return `<div class="macro">${donutSvg(parts, s.kcal)}
+      <ul class="mlegend">${parts.filter(p => p.k !== "alcohol" || p.g > 0).map(p => `<li><i style="background:var(--m-${p.k})"></i><span>${p.label}</span>
+        <b>${num.format(Math.round(p.g))} g</b><small>${Math.round(p.kcal / sum * 100)} %</small></li>`).join("")}</ul></div>
+    <p class="note">Anteil an der Energie. Grob gut: Eiweiß 20–30 %, Fett 25–35 %, Kohlenhydrate 40–55 %.</p>`;
+}
+function targetBars(s, prot, satMax) {
+  return `${limitBar("Eiweiß", s.protein, prot, "min", "1 g je kg Körpergewicht", "var(--m-protein)")}
     ${limitBar("Ballaststoffe", s.fiber, 30, "min", "DGE-Empfehlung")}
     ${limitBar("Zucker", s.sugar, 50, "max", "WHO-Obergrenze")}
     ${limitBar("Gesättigtes Fett", s.satfat, satMax, "max", "10 % deines Budgets")}
-    ${limitBar("Salz", s.salt, 6, "max", "DGE-Obergrenze")}
-    <h3>💡 Was fehlt?</h3>
-    ${tips.length ? `<ul class="tips">${tips.map(t => `<li>${t}</li>`).join("")}</ul>` : `<p class="note">Alles im grünen Bereich – gute Balance! 👍</p>`}
-  </details>`;
+    ${limitBar("Salz", s.salt, 6, "max", "DGE-Obergrenze")}`;
+}
+function tipsHtml(tips) {
+  return tips.length ? `<ul class="tips">${tips.map(t => `<li>${t}</li>`).join("")}</ul>` : `<p class="note">Alles im grünen Bereich – gute Balance! 👍</p>`;
+}
+
+/* ---------- Wochenrückblick (review.py) ---------- */
+
+const fmtShort = d => fmtDay(d, { day: "2-digit", month: "2-digit" });
+const weekLabel = r => `${fmtShort(r.start)}–${fmtShort(r.end)}`;
+function balanceText(p, k, P) {
+  const v = P ? p : k;
+  return v >= 0 ? `${num.format(v)} ${unit()} unter Budget` : `${num.format(-v)} ${unit()} drüber`;
+}
+
+// Montags bis mittwochs auf Heute, bis geöffnet oder weggeklickt (Einstellung review_seen, gilt auf allen Geräten)
+function weekTeaserHtml() {
+  const t = S.week_review;
+  if (!t) return "";
+  const P = isPoints();
+  return `<div class="card" id="wk-teaser"><div class="card-head"><h2>🗓 Deine Woche ${weekLabel(t)}</h2>
+      <button class="btn icon small-icon" id="wk-x" aria-label="Ausblenden">✕</button></div>
+    <p style="margin-top:0">${t.in_budget} von ${t.logged} ${t.logged === 1 ? "Tag" : "Tagen"} im Budget · ${balanceText(t.balance_points, t.balance_kcal, P)}${t.trend_delta != null ? ` · Trend ${fmtSigned(t.trend_delta)} kg` : ""}</p>
+    <button class="btn small block" id="wk-open">Wochenrückblick ansehen</button></div>`;
+}
+function bindWeekTeaser() {
+  const t = S.week_review;
+  if (!t || !$("#wk-teaser")) return;
+  const seen = () => {
+    $("#wk-teaser") && $("#wk-teaser").remove();
+    S.week_review = null;
+    api("/api/settings", { method: "PUT", body: { review_seen: t.start } }).catch(() => {});   // offline: erscheint beim nächsten Laden wieder
+  };
+  $("#wk-x").onclick = seen;
+  $("#wk-open").onclick = () => { seen(); openWeekReview(t.start); };
+}
+
+async function openWeekReview(start) {
+  let r;
+  try { r = await api(`/api/review/week${start ? `?start=${start}` : ""}`); }
+  catch (e) { return toast(e instanceof AuthError ? "Bitte neu anmelden" : "Offline – der Wochenrückblick braucht Verbindung"); }
+  openSheet(weekReviewHtml(r), root => {
+    $("#wk-prev", root).onclick = () => openWeekReview(r.prev_start);
+    if (r.next_start) $("#wk-next", root).onclick = () => openWeekReview(r.next_start);
+    $$("[data-day]", root).forEach(d => (d.onclick = () => { closeSheet(); location.hash = "#heute"; goDay(d.dataset.day); }));
+  }, true);
+}
+
+function weekReviewHtml(r) {
+  const P = isPoints(), t = r.trend, tr = r.training;
+  const head = `<h2>🗓 Wochenrückblick</h2>
+    <div class="daynav"><button class="btn icon small-icon" id="wk-prev" aria-label="Woche zurück">‹</button>
+      <b>${weekLabel(r)}</b>
+      <button class="btn icon small-icon" id="wk-next" aria-label="Woche vor" ${r.next_start ? "" : "disabled"}>›</button></div>`;
+  if (!r.logged) return `${head}<div class="empty">In dieser Woche wurde nichts erfasst${r.plan_days.urlaub === 7 ? " – Urlaub" : ""}.</div>`;
+  const plans = Object.entries(r.plan_days).map(([k, n]) => `${n} × ${PAUSE_LABEL[k] || "Refeed-Tag"}`).join(", ");
+  const prev = r.prev.logged ? (P ? `${num1.format(r.prev.avg_points)} P` : `${num.format(r.prev.avg_kcal)} kcal`) : null;
+  const prot = r.targets.protein, satMax = r.targets.satfat;
+  return `${head}
+    ${r.complete ? "" : `<p class="note center">Zwischenstand, die Woche läuft noch.</p>`}
+    <div class="tiles three">
+      <div class="tile"><div class="v">${r.in_budget}/${r.logged}</div><div class="l">Tage im Budget</div></div>
+      <div class="tile"><div class="v">${fmtSigned(P ? r.balance_points : r.balance_kcal)}</div><div class="l">${unit()} Bilanz der Woche</div></div>
+      <div class="tile"><div class="v">${t ? fmtSigned(t.delta) : "–"}</div><div class="l">kg Trend</div></div>
+    </div>
+    <div class="week">${r.days.map(d => {
+      const cls = !d.entries ? "" : d.plan === "urlaub" ? "" : (P ? d.left_points : d.left_kcal) >= 0 ? "ok" : "over";
+      return `<div class="${cls}" data-day="${d.day}">${WEEKDAYS[(new Date(d.day + "T12:00").getDay() + 6) % 7]}<b>${d.entries ? num.format(P ? d.points : d.kcal) : PLAN_ICON[d.plan] || "–"}</b></div>`;
+    }).join("")}</div>
+    <ul class="list mt">
+      ${r.best ? `<li><span class="ic">⭐</span><div class="bd"><b>Bester Tag: ${fmtDay(r.best.day, { weekday: "long" })}</b><div class="meta">${num.format(P ? r.best.left_points : r.best.left_kcal)} ${unit()} unter Budget</div></div></li>` : ""}
+      <li><span class="ic">📊</span><div class="bd"><b>Ø ${P ? `${num1.format(r.avg_points)} P` : `${num.format(r.avg_kcal)} kcal`} am Tag</b><div class="meta">${prev ? `Vorwoche Ø ${prev}` : "Vorwoche ohne Einträge"} · ${r.logged} von 7 Tagen erfasst</div></div></li>
+      ${t ? `<li><span class="ic">⚖️</span><div class="bd"><b>Trend ${num1.format(t.start)} → ${num1.format(t.end)} kg</b><div class="meta">${t.weighings}× gewogen, zuletzt ${num1.format(t.last_weight)} kg</div></div></li>` : ""}
+      ${plans ? `<li><span class="ic">📅</span><div class="bd"><b>${plans}</b><div class="meta">Urlaubstage zählen nicht mit</div></div></li>` : ""}
+    </ul>
+    <h3>Ø Nährwerte je erfasstem Tag</h3>
+    ${macroHtml(r.avg)}
+    ${targetBars(r.avg, prot, satMax)}
+    <h3>💡 Für diese Woche</h3>
+    ${tipsHtml(reviewTips(r.avg, prot, satMax, false))}
+    <h3>Bewegung</h3>
+    <div class="tiles three">
+      <div class="tile"><div class="v">${r.steps_avg ? num.format(r.steps_avg) : "–"}</div><div class="l">Ø Schritte</div></div>
+      <div class="tile"><div class="v">${tr.days}</div><div class="l">Trainingstage</div></div>
+      <div class="tile"><div class="v">+${P ? num.format(tr.points) : num.format(tr.kcal)}</div><div class="l">${P ? "Punkte" : "kcal"} Training</div></div>
+    </div>
+    ${tr.sports.length ? `<ul class="list">${tr.sports.map(x => `<li><span class="ic">${x.icon}</span><div class="bd"><b>${esc(x.name)}</b>
+      <div class="meta">${x.count}× · ${fmtMin(x.minutes)}</div></div></li>`).join("")}</ul>` : ""}
+    <p class="note">Tipp auf einen Tag öffnet ihn auf Heute.</p>`;
 }
 
 function activityHtml() {
@@ -2153,6 +2251,7 @@ async function viewStats() {
       <div class="tile"><div class="v">${a.steps ? num.format(a.steps) : "–"}</div><div class="l">Ø Schritte</div></div>
       <div class="tile"><div class="v">${dw != null ? fmtSigned(dw) : "–"}</div><div class="l">kg Trend im Zeitraum</div></div>
     </div>
+    <button class="btn block" id="wk-review">🗓 Wochenrückblick</button>
     ${adaptiveHtml(d.adaptive, P)}
     <div class="card"><div class="card-head"><h2>${P ? "Punkte" : "kcal"} pro Tag</h2><small>Budget ${P ? b.points + " P" : num.format(b.target) + " kcal"}</small></div>
       ${chartDaily(d.days, P ? "points" : "kcal", P ? b.points : b.target, P ? "act_points" : "act_kcal", P ? "budget_points" : "budget_kcal")}
@@ -2171,6 +2270,7 @@ async function viewStats() {
       ${d.top.length ? `<ul class="list">${d.top.map(x => `<li><div class="bd"><b>${esc(x.name)}</b><div class="meta">${x.count}× · ${num.format(x.kcal)} kcal</div></div><span class="val">${P ? x.points + " P" : num.format(x.kcal) + " kcal"}</span></li>`).join("")}</ul>` : `<div class="empty">Noch keine Einträge.</div>`}</div>
     <div class="card"><div class="card-head"><h2>👟 Schritte</h2><small>Ziel ${num.format(S.settings.steps_goal)}</small></div>${chartSteps(d.days, S.settings.steps_goal)}</div>
     ${trainingStatsHtml(d.training, d.days, P)}`;
+  $("#wk-review").onclick = () => openWeekReview();
   bindAdaptive(d.adaptive);
 }
 
@@ -2807,7 +2907,7 @@ const EMOJI_ICON = {
   "🏠": "house", "📊": "chart-column", "⚖": "weight", "⚙": "sliders-horizontal", "ℹ": "info",
   "🌅": "sunrise", "🍽": "utensils", "🌙": "moon", "🍎": "apple", "☀": "sun", "📱": "smartphone", "📲": "smartphone",
   "✅": "circle-check", "❌": "circle-x", "⛔": "ban", "⚠": "triangle-alert", "🔗": "link", "🔔": "bell", "💾": "database", "🗑": "trash-2",
-  "🍝": "wheat", "🌴": "tree-palm", "⏸": "circle-pause", "📅": "calendar", "⏳": "hourglass", "🧭": "compass",
+  "🍝": "wheat", "🌴": "tree-palm", "⏸": "circle-pause", "📅": "calendar", "🗓": "calendar-range", "⏳": "hourglass", "🧭": "compass",
   "💡": "lightbulb", "⭐": "star", "⚡": "zap", "✨": "sparkles", "👍": "thumbs-up", "✋": "hand", "✏": "pencil",
   "🥚": "egg", "🥦": "leafy-green", "🍬": "candy", "🧈": "droplet", "🧂": null, "🍷": "wine", "🥗": "salad",
   "🍗": "drumstick", "🌾": "wheat", "🥔": null, "🍦": "ice-cream-cone", "🍪": "cookie", "🥤": "cup-soda", "🍫": "lollipop",
