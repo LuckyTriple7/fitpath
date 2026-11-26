@@ -86,6 +86,7 @@ git push --follow-tags            # GitHub testet, prüft Tag = Version, baut da
 | Health Connect | Webhook für Life Dashboard Companion: Schritte (Tagessummen), Trainingseinheiten, Gewicht, Körperfett, Löschungen, Verlauf nachladen |
 | Push | Wiegen (Wochentage wählbar), „noch nichts erfasst“ am Mittag, etwa 15 Minuten vor typischen Snack-Uhrzeiten (gelernt aus Snack-Einträgen und Heißhunger der letzten 3 Wochen, ab 3 Tagen je Stunde), Abend-Check; Ruhezeiten und Höchstzahl pro Tag |
 | Design | Hell und dunkel nach Systemeinstellung, unter **Mehr → Anzeige** pro Gerät fest wählbar (System / Hell / Dunkel, gespeichert im Browser); Statusleisten-Farbe passend |
+| Stil | Ebenfalls unter **Mehr → Anzeige** pro Gerät: **Lebendig** (bunte Emojis, runde Formen, warmes Orange) oder **Sachlich** (einfarbige Linien-Icons, klare Kanten, kühle Farben mit Blau als Akzent, Schrift Inter, kompakter Tagesring mit Zahlen daneben). Beide Stile gibt es hell und dunkel |
 | Offline | App-Hülle und letzter Zustand aus dem Cache, Einträge warten in einer Warteschlange |
 
 ## Rezept-Import per Link
@@ -194,7 +195,7 @@ Uhrzeiten und Zahlen gibt die App unabhängig von der Browsersprache ein: Uhrzei
 | `app/db.py` | SQLite-Schema, Einstellungen, Zeitfunktionen |
 | `app/points.py` | Punkte-Formel, 0-Punkte-Regeln, kcal-Ziel, Budget, Aktivität, Wochenreserve |
 | `app/plan.py` | Budget je Tag: Refeed-Tage, Diätpause, Urlaub |
-| `app/static/vendor/` | Barcode-Erkennung für Browser ohne `BarcodeDetector`: `barcode-detector` 3.2.3 (IIFE-Ponyfill) und `zxing-wasm` 3.1.6, beide MIT, Herkunft und Prüfsummen in `LICENSE.txt`. Ausgeliefert nur über die feste Liste `VENDOR` in `app/main.py` |
+| `app/static/vendor/` | Barcode-Erkennung für Browser ohne `BarcodeDetector`: `barcode-detector` 3.2.3 (IIFE-Ponyfill) und `zxing-wasm` 3.1.6, beide MIT, Herkunft und Prüfsummen in `LICENSE.txt`. Dazu die Schrift Inter (OFL) für den Stil „Sachlich“. Ausgeliefert nur über die feste Liste `VENDOR` in `app/main.py` |
 | `app/meals.py` | Gespeicherte Mahlzeiten: prüfen, speichern (gleicher Name ersetzt), Punkte mit aktuellen Nährwerten, Positionen fürs Erfassen |
 | `app/training.py` | Sportarten mit MET, Zuordnung der Health-Connect-Typen, Trainingspunkte, doppelte Einheiten |
 | `app/foods.py` | BLS-Import, Suche, Portionen, eigene Lebensmittel, Open-Food-Facts-Barcodes |
@@ -207,12 +208,15 @@ Uhrzeiten und Zahlen gibt die App unabhängig von der Browsersprache ein: Uhrzei
 | `app/ai.py` | Erfassen per Text über LiteLLM |
 | `app/push.py` | VAPID (erzeugt beim ersten Start), Erinnerungen alle 5 Minuten |
 | `app/auth.py`, `app/cli.py`, `app/backup.py` | Einmal-Links, Kopplung per QR-Code/Code, Geräte, Kommandozeile, tägliche Sicherung |
-| `app/static/` | PWA: `index.html`, `app.js`, `styles.css`, `sw.js`, Manifest, Icons |
+| `app/static/` | PWA: `index.html`, `app.js`, `styles.css`, `sw.js`, Manifest, Icons; `icons.svg` = Linien-Icons (Lucide, ISC) für den Stil „Sachlich“ |
+| `tools/icons.py` | Baut `icons.svg` aus der Zuordnung `EMOJI_ICON` in `app.js` (Emoji → Lucide-Name), lädt dazu von lucide-static |
 | `seed/bls40.csv.gz` | BLS 4.0 in kompakter Form |
 | `tools/bls_convert.py` | BLS-Excel → Seed (nur lokal, braucht `openpyxl`) |
-| `tests/` | `pytest`: Formel, Budget, Reserve, Trend, Webhook, Gerichte, KI-Erfassung, API-Durchstich (läuft auch in GitHub Actions vor dem Image-Bau) |
+| `tests/` | `pytest`: Formel, Budget, Reserve, Trend, Webhook, Gerichte, KI-Erfassung, beide Stile vollständig, API-Durchstich (läuft auch in GitHub Actions vor dem Image-Bau) |
 | `.github/workflows/image.yml` | Tests, Image für amd64/arm64 nach ghcr.io, Release bei Tag |
 | `CHANGELOG.md`, `tools/release.py` | Änderungen je Version, Release vorbereiten |
+
+**Zwei Stile:** Neue Oberfläche muss in „Lebendig“ und „Sachlich“ (je hell und dunkel) passen. Farben, Radien und Schatten nur über die CSS-Variablen in `styles.css` (`--card`, `--accent`, `--radius`, `--r-md`, `--r-sm`, `--r-pill`, `--shadow` …); eigene Formen im Block „Stil Sachlich“ am Ende nachziehen. Jedes neue Emoji in `EMOJI_ICON` (`app.js`) eintragen und `python tools/icons.py` laufen lassen; `tests/test_style.py` meldet Vergessenes.
 
 Tests lokal: `python -m venv venv && venv/bin/pip install -r requirements.txt pytest && venv/bin/python -m pytest -q tests`
 

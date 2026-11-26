@@ -1,6 +1,6 @@
 /* FitPath Service Worker: App-Hülle offline, Push */
-const VERSION = "fp-v4";
-const SHELL = ["/", "/app.js", "/styles.css", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png"];
+const VERSION = "fp-v5";
+const SHELL = ["/", "/app.js", "/styles.css", "/manifest.webmanifest", "/icons.svg", "/vendor/inter-latin-wght-5.1.0.woff2", "/icons/icon-192.png", "/icons/icon-512.png"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));

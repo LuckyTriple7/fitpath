@@ -5,14 +5,20 @@ const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const view = $("#view");
 
+/* Stil je Gerät: lebendig (bunte Emojis, runde Formen) | sachlich (Linien-Icons, klare Kanten, ruhige Farben).
+   Jede neue Oberfläche muss in beiden Stilen passen: Farben, Radien und Schatten nur über die Variablen in
+   styles.css, neue Emojis in EMOJI_ICON eintragen (tests/test_style.py prüft das), dann python tools/icons.py. */
+function savedStyle() { try { return localStorage.getItem("fp_style") === "sachlich" ? "sachlich" : "lebendig"; } catch (_) { return "lebendig"; } }
+document.documentElement.dataset.style = savedStyle();
+
 /* Design je Gerät: system | light | dark (im Browser gespeichert, nicht auf dem Server) */
-const THEME_COLOR = { dark: "#0f1115", light: "#f6f5f2" };
+const THEME_COLOR = { lebendig: { dark: "#0f1115", light: "#f6f5f2" }, sachlich: { dark: "#0e1013", light: "#f4f5f7" } };
 function applyTheme(t) {
-  const root = document.documentElement;
+  const root = document.documentElement, col = THEME_COLOR[root.dataset.style] || THEME_COLOR.lebendig;
   if (t === "light" || t === "dark") root.dataset.theme = t; else delete root.dataset.theme;
   // Statusleiste: bei fester Wahl beide Meta-Tags auf dieselbe Farbe, sonst je nach System
   $$('meta[name="theme-color"]').forEach(m => {
-    m.content = THEME_COLOR[t] || (m.media.includes("dark") ? THEME_COLOR.dark : THEME_COLOR.light);
+    m.content = col[t] || (m.media.includes("dark") ? col.dark : col.light);
   });
 }
 function savedTheme() { try { return localStorage.getItem("fp_theme") || "system"; } catch (_) { return "system"; } }
@@ -470,7 +476,7 @@ function viewToday() {
     <div class="daynav"><button class="btn icon small-icon" id="prev" aria-label="Tag zurück">‹</button>
       <b>${isToday ? "Heute" : fmtDay(o.day, { weekday: "long", day: "2-digit", month: "2-digit" })}</b>
       <button class="btn icon small-icon" id="next" aria-label="Tag vor" ${isToday ? "disabled" : ""}>›</button></div>
-    <div class="card hero">
+    <div class="card hero today">
       <div class="ring toggle" id="ring" role="button" tabindex="0" aria-label="Anzeige umschalten auf ${P ? "Kalorien" : "Punkte"}">${ringSvg(used / Math.max(budget + bonus, 1), over)}
         <div class="t${over ? " over" : ""}"><b>${num.format(left)}</b><span>${P ? "Punkte übrig" : "kcal übrig"}</span>
           <small class="used"><b>${num.format(used)}</b> verbraucht</small></div></div>
@@ -2443,6 +2449,9 @@ async function viewMore() {
     <div class="card"><h2>Anzeige</h2>${chipGroup("display", [["points", "Punkte"], ["kcal", "Kalorien"]], s.display)}
       <label class="f mt"><span>Design (nur dieses Gerät)</span></label>
       ${chipGroup("theme", [["system", "📱 System"], ["light", "☀️ Hell"], ["dark", "🌙 Dunkel"]], savedTheme())}
+      <label class="f mt"><span>Stil (nur dieses Gerät)</span></label>
+      ${chipGroup("style", [["lebendig", "Lebendig"], ["sachlich", "Sachlich"]], savedStyle())}
+      <p class="note">Lebendig: bunte Emojis, runde Formen. Sachlich: Linien-Icons, klare Kanten, ruhige Farben. Hell und Dunkel gibt es in beiden.</p>
       <details class="more mt"><summary>So rechnet FitPath</summary>
         <p class="note"><b>Punkte je Eintrag</b> = kcal ÷ 35 + gesättigtes Fett ÷ 4 + Zucker ÷ 10 + Alkohol ÷ 8 − Eiweiß ÷ 10 − Ballaststoffe ÷ 5 (Gramm, nie unter 0, gerundet). Eiweiß und Ballaststoffe machen satt und senken die Punkte, Zucker, gesättigtes Fett und Alkohol erhöhen sie.</p>
         <p class="note"><b>0 Punkte</b>: frisches Obst und Gemüse, Pilze, Sprossen, gegarte Hülsenfrüchte (nicht Saft, Trockenobst, Konserven mit Zucker). Pro Lebensmittel änderbar.</p>
@@ -2491,6 +2500,12 @@ async function viewMore() {
       try { localStorage.setItem("fp_theme", val); } catch (_) { /* privates Fenster: gilt bis zum Neuladen */ }
       applyTheme(val);
       return;
+    }
+    if (group === "style") {
+      try { localStorage.setItem("fp_style", val); } catch (_) { /* privates Fenster: gilt bis zum Neuladen */ }
+      document.documentElement.dataset.style = val;
+      applyTheme(savedTheme());
+      return;                                            // Icons tauscht iconize über queueFit (bindChips)
     }
     if (group === "refeed") return saveRefeed(val.map(Number));
     if (group === "display") { S = await api("/api/settings", { method: "PUT", body: { display: val } }); toast(val === "kcal" ? "Anzeige in kcal" : "Anzeige in Punkten"); }
@@ -2785,11 +2800,74 @@ function fitChips() {
     if (cs.some(over)) { cs.forEach(c => (c.style.fontSize = "")); g.classList.add("wrapped"); }
   }
 }
+/* Stil „Sachlich“: Emojis in der Oberfläche durch Linien-Icons aus /icons.svg ersetzen (Lucide-Namen).
+   null = kein passendes Icon, bleibt Emoji, aber grau. Jedes Emoji aus app.js, index.html und app/*.py
+   muss hier oder in EMOJI_KEEP stehen (tests/test_style.py); neue Namen holt python tools/icons.py. */
+const EMOJI_ICON = {
+  "🏠": "house", "📊": "chart-column", "⚖": "weight", "⚙": "sliders-horizontal", "ℹ": "info",
+  "🌅": "sunrise", "🍽": "utensils", "🌙": "moon", "🍎": "apple", "☀": "sun", "📱": "smartphone", "📲": "smartphone",
+  "✅": "circle-check", "❌": "circle-x", "⛔": "ban", "⚠": "triangle-alert", "🔗": "link", "🔔": "bell", "💾": "database", "🗑": "trash-2",
+  "🍝": "wheat", "🌴": "tree-palm", "⏸": "circle-pause", "📅": "calendar", "⏳": "hourglass", "🧭": "compass",
+  "💡": "lightbulb", "⭐": "star", "⚡": "zap", "✨": "sparkles", "👍": "thumbs-up", "✋": "hand", "✏": "pencil",
+  "🥚": "egg", "🥦": "leafy-green", "🍬": "candy", "🧈": "droplet", "🧂": null, "🍷": "wine", "🥗": "salad",
+  "🍗": "drumstick", "🌾": "wheat", "🥔": null, "🍦": "ice-cream-cone", "🍪": "cookie", "🥤": "cup-soda", "🍫": "lollipop",
+  "🍲": "cooking-pot", "📷": "camera", "📸": "camera", "📦": "package", "🔎": "search", "🛒": "shopping-cart",
+  "👟": "footprints", "⌚": "watch", "💪": "dumbbell", "🏋": "dumbbell", "🏊": "waves", "🚴": "bike", "🚲": "bike",
+  "🏃": "activity", "🚶": "route", "🥾": "mountain", "🔁": "repeat", "🚣": "sailboat", "🔥": "flame", "🧘": "flower-2",
+  "💦": "droplets", "💃": "music", "⚽": "volleyball",
+  "🎯": "target", "📈": "trending-up", "📉": "trending-down", "📏": "ruler", "🚦": "gauge",
+  "🌱": "sprout", "🏅": "medal", "🏆": "trophy", "🏁": "flag", "🚀": "rocket", "❤": "heart", "📝": "notebook-pen",
+};
+// Typografische Zeichen, die in beiden Stilen bleiben, wie sie sind
+const EMOJI_KEEP = new Set(["☆", "★", "✓", "✕", "→", "↺", "©", "®", "™"]);
+const EMOJI_RE = /\p{Extended_Pictographic}(?:\uFE0F|\u200D\p{Extended_Pictographic})*/gu;
+const SVG_NS = "http://www.w3.org/2000/svg";
+function iconize() {
+  if (document.documentElement.dataset.style !== "sachlich") {        // zurück zu Lebendig
+    for (const el of document.querySelectorAll("svg.ic[data-e], span.emo")) el.replaceWith(el.getAttribute("data-e") || el.textContent);
+    return;
+  }
+  const skip = "svg, option, textarea, script, style, title, .emo";
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, { acceptNode: n =>
+    !n.parentElement || n.parentElement.closest(skip) || !n.data.match(EMOJI_RE) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT });
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  for (const n of nodes) {
+    const frag = document.createDocumentFragment();
+    let last = 0, changed = false;
+    for (const m of n.data.matchAll(EMOJI_RE)) {
+      const key = m[0].replace(/\uFE0F/g, "");
+      if (EMOJI_KEEP.has(key)) continue;
+      frag.append(n.data.slice(last, m.index));
+      last = m.index + m[0].length;
+      changed = true;
+      const name = EMOJI_ICON[key];
+      if (name) {
+        const svg = document.createElementNS(SVG_NS, "svg"), use = document.createElementNS(SVG_NS, "use");
+        svg.setAttribute("class", "ic");
+        svg.setAttribute("aria-hidden", "true");
+        svg.setAttribute("data-e", m[0]);
+        use.setAttribute("href", `/icons.svg#${name}`);
+        svg.append(use);
+        frag.append(svg);
+      } else {
+        const sp = document.createElement("span");
+        sp.className = "emo";
+        sp.textContent = m[0];
+        frag.append(sp);
+      }
+    }
+    if (!changed) continue;
+    frag.append(n.data.slice(last));
+    n.replaceWith(frag);
+  }
+}
+
 let fitQueued = false;
 function queueFit() {
   if (fitQueued) return;
   fitQueued = true;
-  requestAnimationFrame(() => { fitQueued = false; fitButtons(); });
+  requestAnimationFrame(() => { fitQueued = false; iconize(); fitButtons(); });
 }
 // Jede neu gezeichnete Ansicht oder jedes Blatt prüfen; fitButtons selbst ändert nur Attribute, löst also nichts erneut aus
 new MutationObserver(queueFit).observe(document.body, { childList: true, subtree: true });

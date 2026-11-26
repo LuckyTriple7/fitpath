@@ -85,14 +85,21 @@ def sw():
     return _static("sw.js", "text/javascript")
 
 
+@app.get("/icons.svg")
+def icons_svg():
+    # Linien-Icons für den Stil „Sachlich“ (tools/icons.py); no-cache, damit neue Icons sofort ankommen
+    return _static("icons.svg", "image/svg+xml")
+
+
 @app.get("/manifest.webmanifest")
 def manifest():
     return _static("manifest.webmanifest", "application/manifest+json")
 
 
-# Barcode-Erkennung für Safari/iPhone (siehe static/vendor/LICENSE.txt). Feste Liste, Version im Namen,
+# Barcode-Erkennung für Safari/iPhone und Schrift (siehe static/vendor/LICENSE.txt). Feste Liste, Version im Namen,
 # deshalb darf der Browser die Dateien ein Jahr behalten.
-VENDOR = {"barcode-detector-3.2.3.js": "text/javascript", "zxing_reader-3.1.6.wasm": "application/wasm"}
+VENDOR = {"barcode-detector-3.2.3.js": "text/javascript", "zxing_reader-3.1.6.wasm": "application/wasm",
+          "inter-latin-wght-5.1.0.woff2": "font/woff2"}         # Schrift für den Stil „Sachlich“
 
 
 @app.get("/vendor/{name}")
