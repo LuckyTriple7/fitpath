@@ -6,6 +6,9 @@ Neue Einträge kommen unter „Unveröffentlicht“. `python tools/release.py X.
 
 ## [Unveröffentlicht]
 
+### Neu
+- **⏳ Intervallfasten** (Mehr → Intervallfasten, Standard aus): 14:10, 16:8 oder 18:6 mit frei wählbarem Beginn des Essensfensters. FitPath misst die Fastenzeit aus den Uhrzeiten der Einträge, von der letzten Mahlzeit bis zur ersten am nächsten Tag. Kaffee und Tee unter 10 kcal zählen nicht. Auf Heute zeigt eine Karte, wie lange schon gefastet wird und wann das Ziel erreicht ist, im Fenster die Restzeit, dazu die heutige Fastenzeit und die Serie. Ist die letzte Mahlzeit nicht erfasst, startet „Fasten jetzt starten“ von Hand. Einträge haben dann ein Feld „Uhrzeit“, um nachgetragene Mahlzeiten richtig einzuordnen. Erinnerungen kommen, wenn das Fenster öffnet und 30 Minuten bevor es schließt. In der Fastenzeit fällt die Snack-Erinnerung weg, „Nichts erfasst“ kommt erst 2 Stunden nach Fensterbeginn. Die Statistik zeigt geschaffte Tage, Ø Fastenzeit, Serie und die letzten 14 Tage. Punkte und Budget bleiben unverändert.
+
 ## [0.30.0] – 2026-11-26
 
 ### Neu

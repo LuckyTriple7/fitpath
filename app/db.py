@@ -188,6 +188,11 @@ DEFAULTS = {
         "Süßes gesehen": "Aus dem Blick räumen und 10 Minuten warten",
     },
     "unlocked": {},
+    # Intervallfasten (fasting.py), Standard aus
+    "fast_mode": "",            # "" | 14:10 | 16:8 | 18:6
+    "fast_window": "12:00",     # Essensfenster öffnet
+    "fast_push": True,          # Erinnerung, wenn das Fenster öffnet und kurz bevor es schließt
+    "fast_since": "",           # Fasten von Hand gestartet (letzte Mahlzeit nicht erfasst)
     "review_seen": "",          # Montag der Woche, deren Rückblick schon geöffnet oder weggeklickt wurde
     "challenges_done": [],
     "challenge_skips": {},

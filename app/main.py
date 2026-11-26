@@ -14,7 +14,7 @@ import httpx2
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 
-from . import __version__, adaptive, ai, auth, eatout, backup, body, db, diary, foods, ingest, meals, motivation, plan, points, push, recipe_import, review, swaps, training
+from . import __version__, adaptive, ai, auth, eatout, backup, body, db, diary, fasting, foods, ingest, meals, motivation, plan, points, push, recipe_import, review, swaps, training
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 MAX_INGEST_BYTES = 12 * 1024 * 1024
@@ -204,6 +204,17 @@ def _clean_time(v):
     return v
 
 
+def _clean_since(v) -> str:
+    """Fasten von Hand gestartet: Zeitpunkt der letzten Mahlzeit, höchstens 2 Tage zurück, nicht in der Zukunft."""
+    if not v:
+        return ""
+    ts = db.parse(str(v))
+    now = db.now_utc()
+    if not now - timedelta(days=2) <= ts <= now + timedelta(minutes=5):
+        raise ValueError("Zeitpunkt ungültig")
+    return db.iso(min(ts, now))
+
+
 def _day(v) -> str:
     try:
         return db.parse_day(str(v)).isoformat()
@@ -242,6 +253,10 @@ VALIDATORS = {
     "lunch_reminder": lambda v: _clean_time(v) if v else "",
     "evening_time": lambda v: _clean_time(v) if v else "",
     "snack_push": bool,
+    "fast_mode": lambda v: v if v in fasting.MODES else "",
+    "fast_window": _clean_time,
+    "fast_push": bool,
+    "fast_since": _clean_since,
     "craving_triggers": lambda v: [t for t in dict.fromkeys(_clean_text(x, 40) for x in list(v)[:20]) if t],
     "review_seen": lambda v: db.parse_day(str(v)).isoformat(),      # Wochenrückblick: Montag der gesehenen Woche
     "plans": lambda v: {_clean_text(k, 40): _clean_text(t, 200) for k, t in list(dict(v).items())[:20]
@@ -293,6 +308,7 @@ def _state(conn, day: str | None = None) -> dict:
         "overview": (ov := diary.overview(conn, s, day)),
         "plan": plan.info(s, ov["budget"], db.parse_day(db.today())),
         "week_review": review.teaser(conn, s),
+        "fasting": fasting.status(conn, s),
         "motivation": motivation.state(conn, s),
         "body": body.summary(conn, s),
         "recent": foods.recent(conn, 12),
@@ -578,6 +594,8 @@ async def log_add(request: Request, device=Depends(auth.require)):
         for item in items[:200]:
             e = _clean_entry(conn, item)
             _upsert_entry(conn, e)
+            if isinstance(item, dict) and item.get("ts"):          # Uhrzeit geändert (beim Fasten wichtig)
+                conn.execute("UPDATE food_log SET ts = ? WHERE id = ?", (e["ts"], e["id"]))
             day = e["day"]
         return _state(conn, day if not isinstance(data, list) else None)
 

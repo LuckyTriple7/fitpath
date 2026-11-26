@@ -16,7 +16,7 @@ from datetime import datetime
 
 from datetime import timedelta
 
-from . import db, motivation, plan
+from . import db, fasting, motivation, plan
 
 VAPID_FILE = os.path.join(db.DATA_DIR, "vapid_private.pem")
 VAPID_SUB = os.environ.get("VAPID_SUB") or os.environ.get("PUBLIC_URL") or "https://localhost"
@@ -113,6 +113,23 @@ EVENING_TEXTS = ["Tag fast geschafft. Fehlt noch eine Mahlzeit im Tagebuch?",
                  "Kurzer Abend-Check: Ist alles erfasst? Dann siehst du morgen die Reserve."]
 
 
+def fasting_push(conn, s: dict, loc: datetime, last, phase: str) -> bool:
+    """Essensfenster geht auf (in der ersten Stunde, wenn noch nichts gegessen) oder schließt in 30 Minuten."""
+    for d in (loc.date() - timedelta(days=1), loc.date()):
+        op, cl = fasting.window(s, d)
+        if phase == "open" and op <= loc < op + timedelta(hours=1) and _log(conn, "fast", f"fast_open:{d}"):
+            h = (loc - last).total_seconds() / 3600 if last else None
+            body = (f"{int(h)} Stunden gefastet, geschafft! Guten Appetit." if h is not None and h >= fasting.hours(s) - fasting.TOLERANCE_H
+                    else f"Ab jetzt bis {cl.strftime('%H:%M')} darfst du essen.")
+            send(conn, "Essensfenster offen", body, "/#heute", "fast")
+            return True
+        if cl - timedelta(minutes=30) <= loc < cl and _log(conn, "fast", f"fast_close:{d}"):
+            send(conn, f"Essensfenster schließt um {cl.strftime('%H:%M')}",
+                 "Noch 30 Minuten. Danach beginnt die Fastenzeit, Wasser, Tee und schwarzer Kaffee gehen immer.", "/#heute", "fast")
+            return True
+    return False
+
+
 def tick() -> None:
     with db.connect() as conn:
         s = db.get_settings(conn)
@@ -137,14 +154,25 @@ def tick() -> None:
 
         entries = conn.execute("SELECT COUNT(*), COUNT(DISTINCT meal) FROM food_log WHERE day = ?", (today,)).fetchone()
 
+        # Fasten: Fenster öffnet / schließt bald; in der Fastenzeit keine Snack-Erinnerung
+        phase, opens_late = None, False
+        if fasting.hours(s):
+            past = [t for t in fasting.meal_times(conn, loc.date() - timedelta(days=1), loc.date()) if t <= loc]
+            last = past[-1] if past else None
+            phase = fasting.phase(s, loc, last)
+            op_today = fasting.window(s, loc.date())[0]
+            opens_late = loc < op_today + timedelta(hours=2)     # „Nichts erfasst“ erst, wenn das Fenster eine Weile offen ist
+            if s.get("fast_push") and fasting_push(conn, s, loc, last, phase):
+                return
+
         # 2. Mittag: noch nichts erfasst
-        if s.get("lunch_reminder") and cur >= _hm(s["lunch_reminder"], "14:00") and cur < (17, 0):
+        if s.get("lunch_reminder") and cur >= _hm(s["lunch_reminder"], "14:00") and cur < (17, 0) and not opens_late:
             if not entries[0] and _log(conn, "lunch", f"lunch:{today}"):
                 send(conn, "Noch nichts erfasst", random.choice(LUNCH_TEXTS), "/#heute", "lunch")
                 return
 
         # 3. Snack-Uhrzeiten: etwa 15 Minuten vor einer Stunde, in der oft genascht wird
-        if s.get("snack_push"):
+        if s.get("snack_push") and phase != "fasting":
             nxt = (loc + timedelta(minutes=20)).replace(minute=0, second=0, microsecond=0)
             if 0 < (nxt - loc).total_seconds() / 60 <= 20:
                 for h in motivation.critical_hours(conn):

@@ -495,6 +495,7 @@ function viewToday() {
       ${planWeekNote(o)}
     </div>
     ${isToday ? weekTeaserHtml() : ""}
+    ${isToday ? fastHtml() : ""}
     ${planHtml(o, isToday)}
     ${challengeHtml()}
     ${levelHtml()}
@@ -511,6 +512,7 @@ function viewToday() {
   $("#prev").onclick = () => goDay(addDays(o.day, -1));
   $("#next").onclick = () => !isToday && goDay(addDays(o.day, 1));
   bindWeekTeaser();
+  bindFast();
   $("#week").onclick = e => { const d = e.target.closest("[data-day]"); if (d && d.dataset.day <= S.today) goDay(d.dataset.day); };
   $$("[data-add]").forEach(bt => (bt.onclick = () => openAdd(bt.dataset.add)));
   $$("[data-entry]").forEach(li => (li.onclick = () => {
@@ -1124,6 +1126,85 @@ function weightMiniHtml() {
     ${!b.weighed_today && weighDay ? `<div class="mt"><button class="btn small primary" id="weigh-btn">Heute wiegen</button></div>` : ""}</a>`;
 }
 
+/* ---------- Intervallfasten ---------- */
+
+// Stand jetzt, im Browser gerechnet, damit die Karte jede Minute weiterzählt (Server: fasting.status)
+function fastNow() {
+  const f = S.fasting; if (!f) return null;
+  const now = new Date(), day0 = new Date(now); day0.setHours(0, 0, 0, 0);
+  const at = (off, hm) => { const [h, m] = hm.split(":").map(Number); const x = new Date(day0); x.setDate(x.getDate() + off); x.setHours(h, m, 0, 0); return x; };
+  let open = null, close = null;
+  for (const off of [-1, 0]) {                       // Fenster darf über Mitternacht gehen
+    const op = at(off, f.window_open), cl = new Date(op.getTime() + f.eat_hours * 3600e3);
+    if (op <= now && now < cl) { open = op; close = cl; }
+  }
+  const next = at(0, f.window_open); if (next <= now) next.setDate(next.getDate() + 1);
+  const last = f.last_meal ? new Date(f.last_meal) : null, manual = f.manual_since ? new Date(f.manual_since) : null;
+  const since = last && manual ? (manual > last ? manual : last) : (last || manual);
+  const eating = !!(open && last && last >= open && since === last);
+  return { f, now, open, close, next, since, eating, hours: since ? (now - since) / 3600e3 : null };
+}
+const fmtDur = h => { const m = Math.max(0, Math.round(h * 60)); return m >= 60 ? `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ""}` : `${m} min`; };
+const fmtClock = d => d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit", hour12: false });
+const FAST_TOL = 0.25;
+
+function fastHtml() {
+  const x = fastNow(); if (!x) return "";
+  const f = x.f, done = !x.eating && x.since && x.hours >= f.fast_hours - FAST_TOL;
+  let bar = 0, line;
+  if (x.eating) {
+    bar = (x.now - x.open) / (x.close - x.open);
+    line = `Essensfenster offen bis <b>${fmtClock(x.close)}</b> · noch ${fmtDur((x.close - x.now) / 3600e3)}`;
+  } else if (x.since) {
+    bar = x.hours / f.fast_hours;
+    const goal = new Date(x.since.getTime() + f.fast_hours * 3600e3);
+    line = done ? `<b>${fmtDur(x.hours)}</b> gefastet ✓ · ${x.open ? "Essensfenster ist offen" : `Fenster öffnet um ${fmtClock(x.next)}`}`
+      : `Fastest seit <b>${fmtDur(x.hours)}</b> · ${f.fast_hours} h um ${fmtClock(goal)}`;
+  } else line = "Noch keine Mahlzeit erfasst. Die Fastenzeit beginnt mit der letzten Mahlzeit des Tages.";
+  const t = f.today;
+  const sub = [t ? `Heute ${fmtDur(t.hours)} gefastet${t.ok ? " ✓" : ""}` : "", f.streak > 1 ? `🔥 ${f.streak} Tage in Folge` : ""].filter(Boolean).join(" · ");
+  return `<div class="card" id="fast-card"><div class="card-head"><h2>⏳ Fasten ${esc(f.mode)}</h2><small>Fenster ${f.window_open}–${f.window_close}</small></div>
+    <div class="progress${done ? " good" : ""}"><i style="width:${Math.min(Math.max(bar, 0), 1) * 100}%"></i></div>
+    <small style="display:block">${line}</small>${sub ? `<small class="muted" style="display:block">${sub}</small>` : ""}
+    ${x.eating || !x.since ? `<button class="btn small block mt" id="fast-start">${x.eating ? "Fertig gegessen – Fasten starten" : "Fasten jetzt starten"}</button>` : ""}</div>`;
+}
+
+function bindFast() {
+  const bt = $("#fast-start"); if (!bt) return;
+  bt.onclick = async () => {
+    try { S = await api("/api/settings", { method: "PUT", body: { fast_since: new Date().toISOString() } }); }
+    catch (e) { return toast(e.message); }
+    vibrate(30); viewToday();
+    toast("Fasten läuft. Wasser, Tee und schwarzer Kaffee gehen immer.");
+  };
+}
+
+// Karte zählt jede Minute weiter, ohne den Rest von Heute neu zu zeichnen
+setInterval(() => {
+  const el = $("#fast-card");
+  if (!el || !S || !S.fasting || document.hidden) return;
+  el.outerHTML = fastHtml();
+  bindFast();
+}, 60000);
+
+function fastStatsHtml() {
+  const f = S.fasting; if (!f) return "";
+  const W = 340, H = 120, P = 30, n = f.days.length, max = 24;
+  const bw = (W - P) / n, Y = v => H - 16 - v / max * (H - 26);
+  const bars = f.days.map((x, i) => x.hours != null ? `<rect x="${(P + i * bw + bw * .14).toFixed(1)}" y="${Y(Math.min(x.hours, max)).toFixed(1)}" width="${Math.max(bw * .72, 1).toFixed(1)}" height="${(Math.min(x.hours, max) / max * (H - 26)).toFixed(1)}" rx="2" fill="${x.ok ? "var(--good)" : "var(--accent)"}"><title>${x.day}: ${num1.format(x.hours)} h</title></rect>` : "").join("");
+  const chart = f.days.some(x => x.hours != null) ? `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Fastenstunden pro Tag">
+    <line x1="${P}" x2="${W}" y1="${Y(f.fast_hours).toFixed(1)}" y2="${Y(f.fast_hours).toFixed(1)}" stroke="var(--muted)" stroke-dasharray="4 3"/>
+    <text x="0" y="${(Y(f.fast_hours) + 3).toFixed(1)}">${f.fast_hours} h</text>${bars}</svg>` : `<div class="empty">Noch kein Tag mit Mahlzeit am Vorabend und am Morgen.</div>`;
+  return `<div class="card"><div class="card-head"><h2>⏳ Fasten ${esc(f.mode)}</h2><small>letzte 14 Tage</small></div>
+    <div class="tiles three">
+      <div class="tile"><div class="v">${f.week_ok}/${f.week_days}</div><div class="l">geschafft (7 Tage)</div></div>
+      <div class="tile"><div class="v">${f.avg_hours != null ? num1.format(f.avg_hours) + " h" : "–"}</div><div class="l">Ø Fastenzeit (30 Tage)</div></div>
+      <div class="tile"><div class="v">${f.streak}</div><div class="l">Tage in Folge</div></div></div>
+    ${chart}
+    <div class="legend"><span><i style="background:var(--good)"></i>geschafft</span><span><i style="background:var(--accent)"></i>kürzer</span><span><i style="background:var(--muted)"></i>Ziel</span></div>
+    <p class="note">Gezählt von der letzten Mahlzeit bis zur ersten am nächsten Tag. Tage ohne Einträge am Vorabend fehlen.</p></div>`;
+}
+
 /* ---------- Motivation: Level, Challenge, Abzeichen ---------- */
 
 function levelHtml() {
@@ -1500,6 +1581,7 @@ function openAmount(food, meal, entry = null, back = null) {
   if (multi) { count = parseNum(multi[1]); portion = multi[2]; }
   if (portion && !portions.some(p => p.name === portion)) portion = null;
   const src = { bls: "BLS 4.0", off: "Open Food Facts", custom: "Eigenes", recipe: "Gericht", eatout: "🍽️ Auswärts" }[food.source] || "";
+  const time0 = fmtClock(entry && entry.ts ? new Date(entry.ts) : new Date());   // Uhrzeit fürs Fasten
 
   openSheet(`${back ? `<button class="linkbtn" id="back" style="margin-bottom:6px">‹ Zurück zum Einkauf</button>` : ""}
     <div class="spread"><h2 style="margin:0">${esc(food.name)}</h2>
@@ -1515,7 +1597,8 @@ function openAmount(food, meal, entry = null, back = null) {
       <label class="grow" style="display:block">${decField('class="big" id="grams"', numIn.format(grams))}</label>
       <span class="muted">g</span></div>
     ${chipGroup("meal", MEALS.map(([k, l, i]) => [k, `${i} ${l}`]), entry ? entry.meal : meal, false, "scroll mt")}
-    ${entry ? `<label class="f mt"><span>Tag</span><input type="date" id="e-day" value="${entry.day}" max="${S.today}"></label>` : ""}
+    ${entry || S.fasting ? `<div class="grid2 mt">${entry ? `<label class="f"><span>Tag</span><input type="date" id="e-day" value="${entry.day}" max="${S.today}"></label>` : ""}
+      ${S.fasting ? `<label class="f"><span>Uhrzeit</span>${timeField("e-time", time0)}</label>` : ""}</div>` : ""}
     <div class="why" id="why"></div>
     ${food.source === "eatout" ? `<p class="note">Restaurant-Portionen sind oft größer und fetter als gedacht. Im Zweifel die größere Portion nehmen.</p>` : ""}
     <div class="row nowrap mt">${entry ? `<button class="btn danger" id="del">Löschen</button><button class="btn" id="dup">Kopieren</button>` : ""}<button class="btn primary grow" id="save">${entry ? "Speichern" : "Erfassen"}</button></div>
@@ -1558,7 +1641,7 @@ function openAmount(food, meal, entry = null, back = null) {
       if (p) gi.value = numIn.format(Math.round(p.g * count * 10) / 10);
       markPortion(); update();
     };
-    markPortion(); update(); bindChips(root);
+    markPortion(); update(); bindChips(root); bindTimes(root);
     $("#portions") && ($("#portions").onclick = e => {
       const c = e.target.closest("[data-p]"); if (!c) return;
       if (c.dataset.p === "g") { setPortion(null); gi.focus(); gi.select(); } else setPortion(portions[+c.dataset.p], 1);
@@ -1571,9 +1654,16 @@ function openAmount(food, meal, entry = null, back = null) {
       return d && /^\d{4}-\d{2}-\d{2}$/.test(d) && d <= S.today ? d : (entry ? entry.day : (curDay || S.today));
     };
     const label = () => portion ? (count !== 1 ? `${num1.format(count)}× ${portion}` : portion) : null;
+    const withTime = e => {   // Uhrzeit nur mitschicken, wenn sie geändert wurde; false = ungültig
+      const el = $("#e-time", root); if (!el) return e;
+      const hm = normTime(el.value);
+      if (!hm) { el.classList.add("bad"); toast("Uhrzeit als HH:MM eingeben, z. B. 07:30"); return false; }
+      if (hm !== time0) e.ts = new Date(`${e.day}T${hm}:00`).toISOString();
+      return e;
+    };
     $("#save", root).onclick = async () => {
-      const e = { id: entry ? entry.id : uuid(), food_id: food.id, grams, portion: label(), meal: chipVal(root, "meal") || meal, day: target() };
-      if (!(await saveEntry(e))) return;
+      const e = withTime({ id: entry ? entry.id : uuid(), food_id: food.id, grams, portion: label(), meal: chipVal(root, "meal") || meal, day: target() });
+      if (!e || !(await saveEntry(e))) return;
       vibrate(30); lists = null;
       closeSheet();
       if (entry && e.day !== entry.day) {
@@ -1586,8 +1676,8 @@ function openAmount(food, meal, entry = null, back = null) {
       if (back) back();
     };
     $("#dup", root) && ($("#dup", root).onclick = async () => {
-      const e = { id: uuid(), food_id: food.id, grams, portion: label(), meal: chipVal(root, "meal") || meal, day: target() };
-      if (!(await saveEntry(e))) return;
+      const e = withTime({ id: uuid(), food_id: food.id, grams, portion: label(), meal: chipVal(root, "meal") || meal, day: target() });
+      if (!e || !(await saveEntry(e))) return;
       vibrate(30); lists = null;
       closeSheet();
       if (e.day !== entry.day) await shownDayAgain();
@@ -2351,7 +2441,8 @@ async function viewStats() {
     <div class="card"><div class="card-head"><h2>🏆 Größte Punkte-Lieferanten</h2></div>
       ${d.top.length ? `<ul class="list">${d.top.map(x => `<li><div class="bd"><b>${esc(x.name)}</b><div class="meta">${x.count}× · ${num.format(x.kcal)} kcal</div></div><span class="val">${P ? x.points + " P" : num.format(x.kcal) + " kcal"}</span></li>`).join("")}</ul>` : `<div class="empty">Noch keine Einträge.</div>`}</div>
     <div class="card"><div class="card-head"><h2>👟 Schritte</h2><small>Ziel ${num.format(S.settings.steps_goal)}</small></div>${chartSteps(d.days, S.settings.steps_goal)}</div>
-    ${trainingStatsHtml(d.training, d.days, P)}`;
+    ${trainingStatsHtml(d.training, d.days, P)}
+    ${fastStatsHtml()}`;
   $("#wk-review").onclick = () => openWeekReview();
   bindAdaptive(d.adaptive);
 }
@@ -2649,6 +2740,15 @@ async function viewMore() {
       <label class="f"><span>Tagesziel</span><input type="number" id="s-goal" value="${s.steps_goal}" step="500"></label></div>
       <p class="note">Die Grundlinie steckt schon im Alltags-Bedarf. Erst Schritte darüber geben Aktivitätspunkte.</p>
       <button class="btn small" id="s-save">Speichern</button></div>
+    <div class="card"><h2>⏳ Intervallfasten</h2>
+      ${chipGroup("fast_mode", [["", "Aus"], ["14:10", "14:10"], ["16:8", "16:8"], ["18:6", "18:6"]], s.fast_mode || "")}
+      <div id="fast-more" ${s.fast_mode ? "" : "hidden"}>
+        <div class="grid2 mt"><label class="f"><span>Essensfenster ab</span>${timeField("f-win", s.fast_window)}</label>
+          <label class="f"><span>bis</span><input type="text" id="f-end" disabled></label></div>
+        <label class="switch"><span>Erinnern, wenn das Fenster öffnet und 30 Minuten bevor es schließt</span><input type="checkbox" id="f-push" ${s.fast_push ? "checked" : ""}></label>
+        <button class="btn small" id="f-save">Speichern</button></div>
+      <p class="note">Stunden Fasten : Stunden Essen. 14:10 ist ein sanfter Einstieg, 16:8 der Klassiker, 18:6 für Geübte. Die Fastenzeit misst FitPath aus den Uhrzeiten deiner Einträge, ein Start-Knopf ist nicht nötig. Wasser, Tee und schwarzer Kaffee (unter 10 kcal) brechen das Fasten nicht. Punkte und Budget bleiben gleich, es zählt weiter, wie viel du isst.</p>
+      <p class="note">Bei Diabetes mit Insulin oder Tabletten, in Schwangerschaft und Stillzeit, bei Untergewicht oder nach einer Essstörung vorher ärztlich abklären.</p></div>
     <div class="card"><div class="card-head"><h2>📲 Health Connect</h2><span class="pill${s.ingest_configured ? " good" : ""}">${s.ingest_configured ? "eingerichtet" : "aus"}</span></div>
       <div id="hc"><div class="empty">Lade …</div></div></div>
     <div class="card"><h2>🔔 Erinnerungen</h2>
@@ -2690,8 +2790,27 @@ async function viewMore() {
       return;                                            // Icons tauscht iconize über queueFit (bindChips)
     }
     if (group === "refeed") return saveRefeed(val.map(Number));
+    if (group === "fast_mode") {
+      try { S = await api("/api/settings", { method: "PUT", body: { fast_mode: val } }); } catch (e) { return toast(e.message); }
+      $("#fast-more").hidden = !val; fastEnd();
+      return toast(val ? `Fasten ${val} an` : "Fasten aus");
+    }
     if (group === "display") { S = await api("/api/settings", { method: "PUT", body: { display: val } }); toast(val === "kcal" ? "Anzeige in kcal" : "Anzeige in Punkten"); }
   });
+  const fastEnd = () => {
+    const hm = normTime($("#f-win").value), mode = chipVal(view, "fast_mode");
+    if (!hm || !mode) { $("#f-end").value = ""; return; }
+    const [h, m] = hm.split(":").map(Number), eat = 24 - +mode.split(":")[0];
+    $("#f-end").value = `${pad((h + eat) % 24)}:${pad(m)}`;
+  };
+  fastEnd();
+  $("#f-win").addEventListener("input", fastEnd);
+  $("#f-save").onclick = async () => {
+    const hm = normTime($("#f-win").value);
+    if (!hm) return toast("Uhrzeit als HH:MM eingeben, z. B. 12:00");
+    try { S = await api("/api/settings", { method: "PUT", body: { fast_window: hm, fast_push: $("#f-push").checked } }); toast("Gespeichert"); }
+    catch (e) { toast(e.message); }
+  };
   $("#edit-goals").onclick = openGoals;
   $("#own").onclick = openOwn;
   bindPlanCard();
